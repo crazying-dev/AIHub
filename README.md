@@ -28,18 +28,29 @@ uv run main.py        # 自动安装依赖并启动 Flask（127.0.0.1:2685）
 
 依赖：`flask`（Web）、`psycopg2-binary` + `sqlalchemy`（PostgreSQL）、`python-dotenv`（读取 `.env`），
 以及协议适配层使用的官方 SDK：`openai`、`anthropic`、`google-genai`。
-注意 SQLAlchemy 2.1 起 `postgresql://` 的默认驱动变成了 psycopg(3)，本项目用的是 psycopg2，
-`database/conn.py` 里已把驱动显式指定。
+SQLAlchemy 2.1 带来两个坑，仓库里已处理：
+
+- `postgresql://` 的默认驱动变成了 psycopg(3)，本项目用的是 psycopg2，`database/conn.py` 里把驱动显式指定了；
+- `Row` 的下标只支持整数（内部就是元组），`row["字段名"]` 会抛 `TypeError: tuple indices must be integers or slices, not str`，
+  取字段请统一用 `result.mappings()`（例：`database/user/get.py`）。
 
 ### .env
 
-`.env` 不入库（见 `.gitignore`），部署时需要手动在项目根目录创建：
+`.env` 不入库（见 `.gitignore`），部署时手动在项目根目录创建，字段可参考仓库里的 `.env.example`：
 
 ```bash
 DATABASE_URL=postgresql://<用户>:<密码>@<主机>:5432/aihub?sslmode=disable
+ENVIRONMENT=development
 ```
 
-缺少 `DATABASE_URL` 时会直接抛出明确错误。
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `DATABASE_URL` | 是 | PostgreSQL 连接串（不写驱动时按 psycopg2 处理）；缺失时启动会直接抛出明确错误 |
+| `ENVIRONMENT` | 否 | 值为 `development` 时注册验证码固定 `888888`；**不设置则视为生产环境**，验证码为随机 6 位 |
+
+> 目前注册邮件发送还是占位（`route/api/sign.py` 里的 `# 此处写邮箱发送逻辑`），
+> 生产档下验证码不会发到邮箱，所以现在必须在 `.env` 里配上 `ENVIRONMENT=development` 才能完成注册。
+
 前端构建产物 `dist/` 已随仓库提交，部署机上不需要 Node / pnpm；若 `dist/` 缺失，`/` 会返回 503 并提示先构建。
 
 ## 后端接口

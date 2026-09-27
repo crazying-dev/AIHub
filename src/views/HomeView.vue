@@ -4,7 +4,6 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import CodeBlock from '../components/CodeBlock.vue'
 import { chatSnippets } from '../data/snippets'
-import { demoModels } from '../api/mock'
 import { session } from '../store/session'
 
 const { isAuthed } = session
@@ -34,12 +33,6 @@ const features = [
   },
 ]
 
-const highlights = [
-  { label: '接入模型', value: '12+' },
-  { label: '日均调用', value: '1.2M' },
-  { label: '平均延迟', value: '428ms' },
-  { label: '可用性', value: '99.9%' },
-]
 </script>
 
 <template>
@@ -74,12 +67,6 @@ const highlights = [
           </RouterLink>
         </div>
 
-        <dl class="hero__stats">
-          <div v-for="item in highlights" :key="item.label" class="hero__stat">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
-          </div>
-        </dl>
       </div>
     </section>
 
@@ -104,13 +91,11 @@ const highlights = [
         <span class="eyebrow">支持的模型</span>
         <h2>一个密钥，跨厂商调用</h2>
         <p>
-          模型列表持续更新。调用时只需修改请求体里的 <code>model</code> 字段，
-          其余参数与 OpenAI 完全一致。
+          可用模型由社区池决定：成员上传的上游 key 会声明自己支持的 <code>model</code>，
+          网关按 <code>model</code> 名路由；填 <code>auto</code> 会自动选择优先级更高的可用 key。
         </p>
-        <div class="chips">
-          <span v-for="model in demoModels" :key="model" class="chip mono">{{ model }}</span>
-        </div>
-        <RouterLink class="link" to="/docs">查看完整模型列表与限流说明
+        <p>调用时只需修改请求体里的 <code>model</code> 字段，其余参数与 OpenAI 完全一致。</p>
+        <RouterLink class="link" to="/community">去社区池看看有哪些可用模型
           <AppIcon name="arrow-right" :size="14" />
         </RouterLink>
       </div>
@@ -217,29 +202,6 @@ const highlights = [
   margin-top: 4px;
 }
 
-.hero__stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  width: 100%;
-  margin: 26px 0 0;
-  padding: 18px 0 0;
-  border-top: 1px dashed var(--border);
-}
-
-.hero__stat dt {
-  font-size: 13px;
-  color: var(--text-soft);
-}
-
-.hero__stat dd {
-  margin: 2px 0 0;
-  font-size: 22px;
-  font-weight: 650;
-  color: var(--text-h);
-  font-variant-numeric: tabular-nums;
-}
-
 /* 通用 section */
 .section {
   padding-top: 64px;
@@ -310,22 +272,6 @@ const highlights = [
 
 .section__aside p {
   line-height: 1.7;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 6px 0 4px;
-}
-
-.chip {
-  padding: 5px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--bg-elev);
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .link {
@@ -408,9 +354,5 @@ const highlights = [
     padding: 48px 16px 40px;
   }
 
-  .hero__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-  }
 }
 </style>

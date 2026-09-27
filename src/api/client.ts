@@ -1,15 +1,14 @@
-import { demo } from '../store/demo'
-import type { CommunityKeyItem } from './mock'
+import type { CommunityKeyItem } from './types'
 
 /**
  * 后端接口客户端。
  *
  * 约定（对应 route/api/*.py）：
  * - 鉴权靠浏览器 Cookie（httponly：token / id），所以所有请求都带 credentials: 'include'；
- * - 成功一般返回 "OK" / "Cookie" 文本，失败返回 401；
+ * - 成功一般返回 "OK" / "Cookie" 文本，失败返回 401 或 {"error": "..."}；
  * - 开发环境下由 vite.config.ts 的 proxy 把 /api、/v1 转发到 Flask(127.0.0.1:2685)。
  *
- * 说明：后端尚未完成的接口（如用量统计、日志）暂未对接，页面里用本地占位数据占位。
+ * 后端不可用时一律抛错交给页面提示，不做本地假数据降级。
  */
 
 const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
@@ -25,7 +24,7 @@ export class HttpError extends Error {
   }
 }
 
-/** 请求未能到达后端（服务未启动 / 断网 / CORS 拦截），用于切换到本地占位数据 */
+/** 请求未能到达后端（服务未启动 / 断网 / CORS 拦截） */
 export class NetworkError extends Error {
   constructor(message = '无法连接到后端服务') {
     super(message)
@@ -57,6 +56,18 @@ interface SignUpPayload {
   code: string
   name: string
   password: string
+}
+
+/** 上传社区 key 的表单载荷 */
+export interface CommunityKeyPayload {
+  url: string
+  key: string
+  model: string
+  protocol: string
+  name?: string
+  priority?: number
+  maxuse?: number | null
+  text?: string
 }
 
 export const api = {
@@ -108,15 +119,19 @@ export const api = {
   /** 新建密钥：POST /api/key/new */
   async createKey(): Promise<void> {
     const res = await request('/api/key/new')
-    if (!res.ok) {
-      throw await failure(res, res.status === 401 ? '登录状态已失效，请重新登录' : '创建密钥失败')
-    }
+    if (!res.ok) throw await failure(res, res.status === 401 ? '状态已失效，请重新登录' : '创建密钥失败')
   },
 
-  /** 社区池：当前用户上传的密钥列表：POST /api/community/list */
-  async listCommunityKeys(): Promise<CommunityKeyItem[]> {
-    const res = await request('/api/community/list')
-    if (!res.ok) throw await failure(res, '获取社区密钥失败')
+  /** 吊销（删除）自己的个人密钥：POST /api/key/delete，key 带不带 ah- 前缀都行 */
+  async deleteKey(key: string): Promise<void> {
+    const res = await request('/api/key/delete', { body: { key } })
+    if (!res.ok) throw await failure(res, '吊销失败')
+  },
+
+  /** 社区池全部条目：POST /api/community/pool（公开可浏览，自己的条目标记 mine） */
+  async listCommunityPool(): Promise<CommunityKeyItem[]> {
+    const res = await request('/api/community/pool')
+    if (!res.ok) throw await failure(res, '社区池加载失败')
     const data: unknown = await res.json()
     if (!Array.isArray(data)) return []
     return (data as RawCommunityKey[]).map(toCommunityItem)
@@ -137,19 +152,7 @@ export const api = {
   },
 }
 
-/** 上传社区 key 的表单载荷 */
-export interface CommunityKeyPayload {
-  url: string
-  key: string
-  model: string
-  protocol: string
-  name?: string
-  priority?: number
-  maxuse?: number | null
-  text?: string
-}
-
-/** 后端 otherkey 行的原始字段（下划线命名） */
+/** 后端 otherkey 行的原始字段（下划线命名，mine 由 pool 接口按登录态给出） */
 interface RawCommunityKey {
   id: string
   key: string
@@ -164,6 +167,7 @@ interface RawCommunityKey {
   enabled: boolean
   text: string | null
   created_at: number
+  mine?: boolean
 }
 
 function toCommunityItem(raw: RawCommunityKey): CommunityKeyItem {
@@ -181,6 +185,7 @@ function toCommunityItem(raw: RawCommunityKey): CommunityKeyItem {
     enabled: Boolean(raw.enabled),
     text: raw.text ?? null,
     createdAt: Number(raw.created_at ?? 0),
+    mine: Boolean(raw.mine),
   }
 }
 
@@ -202,23 +207,4 @@ async function failure(res: Response, fallback: string): Promise<HttpError> {
     /* 后端没回 JSON，用兜底文案 */
   }
   return new HttpError(res.status, message)
-}
-
-/**
- * 执行真实请求；若属于「后端没起来」的网络错误，则打开降级开关并回退到 fallback。
- * 业务错误（401/500 等）仍照常抛出，交给页面提示。
- */
-export async function withDemo<T>(
-  task: () => Promise<T>,
-  fallback: () => T | Promise<T>,
-): Promise<T> {
-  try {
-    return await task()
-  } catch (error) {
-    if (error instanceof NetworkError) {
-      demo.activate()
-      return await fallback()
-    }
-    throw error
-  }
 }

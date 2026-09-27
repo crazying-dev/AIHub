@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import AuthCard from '../components/AuthCard.vue'
-import { api, withDemo } from '../api/client'
+import { api } from '../api/client'
 import { session } from '../store/session'
 import { toast } from '../store/toast'
 
@@ -27,11 +27,7 @@ async function submit(): Promise<void> {
 
   loading.value = true
   try {
-    // 后端不可用时，withDemo 会回退到本地占位数据（不做真实鉴权）
-    await withDemo(
-      () => api.signIn(form.email, form.password),
-      () => undefined,
-    )
+    await api.signIn(form.email, form.password)
     session.signIn({ name: form.email.split('@')[0], email: form.email })
     toast.ok('登录成功')
     await router.push(redirect.value)

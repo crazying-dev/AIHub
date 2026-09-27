@@ -50,6 +50,8 @@ const endpoints = [
   { method: 'POST', path: '/api/sign', desc: '登录，成功后在 Cookie 中写入 token / id' },
   { method: 'POST', path: '/api/key/new', desc: '新建一个个人 API 密钥' },
   { method: 'POST', path: '/api/key/get', desc: '获取当前用户的个人密钥列表' },
+  { method: 'POST', path: '/api/key/delete', desc: '吊销自己的个人密钥' },
+  { method: 'POST', path: '/api/community/pool', desc: '社区池全部条目（公开，上游密钥已打码）' },
   { method: 'POST', path: '/api/community/upload', desc: '上传自己的上游 key 到社区池，返回 ah-xxxx' },
   { method: 'POST', path: '/api/community/list', desc: '当前用户上传的社区 key（上游密钥已打码）' },
   { method: 'POST', path: '/api/community/delete', desc: '删除自己上传的社区 key' },
@@ -116,7 +118,7 @@ const errors = [
             <li><strong>创建密钥</strong><span>在控制台点击「新建密钥」，得到 <code>ah-</code> 开头的密钥。</span></li>
             <li>
               <strong>上传社区 key</strong>
-              <span>在控制台「社区 Key」面板上传自己的上游 key，供整个社区（包括你自己）调度。</span>
+              <span>在「社区」页上传自己的上游 key，供整个社区（包括你自己）调度。</span>
             </li>
             <li>
               <strong>发起调用</strong>
@@ -167,7 +169,7 @@ const errors = [
         <section id="routing" class="doc-section">
           <h2>社区池与模型路由</h2>
           <p>
-            任何登录用户都可以把自己的上游 key 上传到社区池（控制台「社区 Key」面板）。上传后对外暴露的凭证同样是
+            任何登录用户都可以把自己的上游 key 上传到社区池（导航栏「社区」页）。上传后对外暴露的凭证同样是
             <code>ah-</code> 开头的社区密钥，任何人都能用它调用 <code>/v1</code>。
           </p>
           <ul class="endpoints">

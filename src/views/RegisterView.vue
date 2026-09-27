@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import AuthCard from '../components/AuthCard.vue'
-import { api, withDemo } from '../api/client'
+import { api } from '../api/client'
 import { toast } from '../store/toast'
 
 const router = useRouter()
@@ -49,10 +49,7 @@ async function sendCode(): Promise<void> {
 
   sending.value = true
   try {
-    await withDemo(
-      () => api.sendSignUpCode(form.email),
-      () => undefined,
-    )
+    await api.sendSignUpCode(form.email)
     step.value = 2
     startCountdown()
     toast.ok('验证码已发送，请查收邮件')
@@ -84,10 +81,7 @@ async function submit(): Promise<void> {
 
   submitting.value = true
   try {
-    await withDemo(
-      () => api.signUp({ email: form.email, code: form.code, name: form.name.trim(), password: form.password }),
-      () => undefined,
-    )
+    await api.signUp({ email: form.email, code: form.code, name: form.name.trim(), password: form.password })
     toast.ok('注册成功，请使用该邮箱登录')
     await router.push({ name: 'login' })
   } catch (err) {

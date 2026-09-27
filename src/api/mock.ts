@@ -1,4 +1,4 @@
-/** 后端不可用时使用的本地演示数据（仅用于 UI 预览） */
+/** 后端不可用时使用的本地占位数据（仅用于 UI 预览） */
 
 export interface ApiKeyItem {
   key: string
@@ -51,7 +51,7 @@ export const demoKeys: ApiKeyItem[] = [
   },
   {
     key: 'ah-b7e04a12-9d35-4f8b-b1c6-5c2d90e7a483',
-    label: '测试环境',
+    label: '备用密钥',
     createdAt: '2026-09-11',
     lastUsed: '2 天前',
     status: 'paused',
@@ -95,7 +95,7 @@ export const demoCommunityKeys: CommunityKeyItem[] = [
     used: 216,
     remaining: 784,
     enabled: true,
-    text: '演示数据',
+    text: null,
     createdAt: 1790000000,
   },
   {

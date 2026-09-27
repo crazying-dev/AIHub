@@ -31,7 +31,7 @@ defineProps<{
     </div>
 
     <p class="auth__legal">
-      继续即表示你同意服务条款与隐私政策；本项目目前为演示版本。
+      继续即表示你同意服务条款与隐私政策。
     </p>
   </div>
 </template>

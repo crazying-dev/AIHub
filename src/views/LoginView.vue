@@ -18,11 +18,6 @@ const redirect = computed(() =>
   typeof route.query.redirect === 'string' && route.query.redirect ? route.query.redirect : '/console',
 )
 
-function fillDemo(): void {
-  form.email = 'demo@aihub.dev'
-  form.password = 'demo1234'
-}
-
 async function submit(): Promise<void> {
   error.value = ''
   if (!form.email || !form.password) {
@@ -32,7 +27,7 @@ async function submit(): Promise<void> {
 
   loading.value = true
   try {
-    // 后端未启动时，withDemo 会回退为演示登录（不做真实鉴权，仅打通 UI 流程）
+    // 后端不可用时，withDemo 会回退到本地占位数据（不做真实鉴权）
     await withDemo(
       () => api.signIn(form.email, form.password),
       () => undefined,
@@ -70,10 +65,7 @@ async function submit(): Promise<void> {
       </div>
 
       <div class="field">
-        <div class="field__row">
-          <label class="field__label" for="login-password">密码</label>
-          <button type="button" class="link-btn" @click="fillDemo">使用演示账号</button>
-        </div>
+        <label class="field__label" for="login-password">密码</label>
         <input
           id="login-password"
           v-model="form.password"
@@ -107,26 +99,6 @@ async function submit(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.field__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.link-btn {
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.link-btn:hover {
-  text-decoration: underline;
 }
 
 .hint {

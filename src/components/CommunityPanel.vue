@@ -99,7 +99,11 @@ async function submit(): Promise<void> {
       () => `ah-demo-${Date.now()}`,
     )
     issued.value = created
-    toast.ok(demo.active.value ? '已生成演示社区密钥（未连接后端）' : '上传成功，已加入社区池')
+    if (demo.active.value) {
+      toast.error('上传失败，请检查网络后重试')
+    } else {
+      toast.ok('上传成功，已加入社区池')
+    }
     form.key = ''
     await load()
   } catch (err) {

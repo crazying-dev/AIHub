@@ -9,7 +9,7 @@ import type { CommunityKeyItem } from './mock'
  * - 成功一般返回 "OK" / "Cookie" 文本，失败返回 401；
  * - 开发环境下由 vite.config.ts 的 proxy 把 /api、/v1 转发到 Flask(127.0.0.1:2685)。
  *
- * 说明：后端尚未完成的接口（如用量统计、日志）暂未对接，页面里用本地演示数据占位。
+ * 说明：后端尚未完成的接口（如用量统计、日志）暂未对接，页面里用本地占位数据占位。
  */
 
 const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
@@ -25,7 +25,7 @@ export class HttpError extends Error {
   }
 }
 
-/** 请求未能到达后端（服务未启动 / 断网 / CORS 拦截），用于切换到演示数据 */
+/** 请求未能到达后端（服务未启动 / 断网 / CORS 拦截），用于切换到本地占位数据 */
 export class NetworkError extends Error {
   constructor(message = '无法连接到后端服务') {
     super(message)
@@ -204,7 +204,7 @@ async function failure(res: Response, fallback: string): Promise<HttpError> {
 }
 
 /**
- * 执行真实请求；若属于「后端没起来」的网络错误，则打开演示模式并回退到 fallback。
+ * 执行真实请求；若属于「后端没起来」的网络错误，则打开降级开关并回退到 fallback。
  * 业务错误（401/500 等）仍照常抛出，交给页面提示。
  */
 export async function withDemo<T>(

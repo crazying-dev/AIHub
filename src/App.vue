@@ -2,13 +2,11 @@
 import { RouterView } from 'vue-router'
 import AppHeader from './components/AppHeader.vue'
 import AppFooter from './components/AppFooter.vue'
-import DemoBanner from './components/DemoBanner.vue'
 import ToastHost from './components/ToastHost.vue'
 </script>
 
 <template>
   <div class="shell">
-    <DemoBanner />
     <AppHeader />
     <main class="shell__main">
       <RouterView v-slot="{ Component }">

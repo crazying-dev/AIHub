@@ -55,7 +55,7 @@ async function sendCode(): Promise<void> {
     )
     step.value = 2
     startCountdown()
-    toast.ok('验证码已发送，请查收邮件（开发环境固定为 888888）')
+    toast.ok('验证码已发送，请查收邮件')
   } catch (err) {
     error.value = err instanceof Error ? err.message : '验证码发送失败'
   } finally {

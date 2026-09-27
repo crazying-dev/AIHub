@@ -6,7 +6,7 @@ export interface Snippet {
   code: string
 }
 
-export const API_HOST = 'http://127.0.0.1:2685'
+export const API_HOST = 'https://ai.yjlt.top'
 export const CHAT_ENDPOINT = `${API_HOST}/v1/chat/completions`
 
 export const chatSnippets: Snippet[] = [

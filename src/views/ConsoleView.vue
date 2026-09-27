@@ -24,7 +24,7 @@ const revealed = ref<string[]>([])
 const stats = ref<StatItem[]>(demoStats)
 const logs = demoLogs
 
-/** 用量趋势（后端统计接口尚未完成，先用演示柱状数据） */
+/** 用量趋势（后端统计接口尚未完成，先用本地占位柱状数据） */
 const trend = [32, 48, 41, 66, 58, 74, 69, 88, 76, 94, 82, 100]
 const trendMax = Math.max(...trend)
 
@@ -90,7 +90,11 @@ async function createKey(): Promise<void> {
       () => undefined,
     )
     await load()
-    toast.ok(demo.active.value ? '已生成演示密钥（未连接后端）' : '密钥创建成功')
+    if (demo.active.value) {
+      toast.error('创建失败，请检查网络后重试')
+    } else {
+      toast.ok('密钥创建成功')
+    }
   } catch (err) {
     toast.error(err instanceof Error ? err.message : '创建密钥失败')
   } finally {
@@ -231,7 +235,6 @@ onMounted(load)
     <section class="card">
       <div class="card__head">
         <h3>最近调用</h3>
-        <span class="badge">演示数据</span>
       </div>
       <div class="table-wrap">
         <table class="table">

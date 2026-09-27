@@ -39,10 +39,6 @@ const year = new Date().getFullYear()
 
     <div class="footer__bar">
       <span>© {{ year }} AIHub · ComputeRelay</span>
-      <span class="footer__status">
-        <i class="dot" />
-        前端演示版（核心业务开发中）
-      </span>
     </div>
   </footer>
 </template>
@@ -132,20 +128,6 @@ const year = new Date().getFullYear()
   border-top: 1px solid var(--border);
   color: var(--text-soft);
   font-size: 13px;
-}
-
-.footer__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warn);
-  box-shadow: 0 0 0 3px var(--warn-bg);
 }
 
 @media (max-width: 720px) {

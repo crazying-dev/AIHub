@@ -139,7 +139,7 @@ const highlights = [
       <div class="cta">
         <div>
           <h2>现在就拿到属于你的第一个密钥</h2>
-          <p>注册即可创建密钥并调用全部模型，开发阶段不收费。</p>
+          <p>注册即可创建密钥并调用全部模型。</p>
         </div>
         <div class="cta__actions">
           <RouterLink class="btn btn--primary" to="/register">免费注册</RouterLink>

@@ -1,6 +1,13 @@
+"""读取用户信息。
+
+注意：SQLAlchemy 2.1 起 Row 的下标只认整数（内部就是元组），
+row["字段名"] 会抛 TypeError: tuple indices must be integers or slices, not str，
+所以这里统一用 result.mappings() 拿到可以按字段名取值的行。
+"""
 import hashlib
 
 from database.conn import conn, text
+
 
 def GetID_UserEmail___UserPassword(UserEmail, UserPassword):
 	"""
@@ -16,7 +23,7 @@ def GetID_UserEmail___UserPassword(UserEmail, UserPassword):
 		sql,
 		{"email_val": UserEmail, "password_val": UserPassword_hash}
 	)
-	row = result.fetchone()
+	row = result.mappings().fetchone()
 	if row:
 		return row["id"]
 	else:
@@ -36,7 +43,7 @@ def GetToken_UserEmail___UserPassword(UserEmail, UserPassword):
 		sql,
 		{"email_val": UserEmail, "password_val": UserPassword_hash}
 	)
-	row = result.fetchone()
+	row = result.mappings().fetchone()
 	if row:
 		return row["token"]
 	else:

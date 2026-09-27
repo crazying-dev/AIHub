@@ -8,9 +8,10 @@
 | 路径 | 说明 |
 | --- | --- |
 | `main.py` | 后端入口：启动 Flask（127.0.0.1:2685）与后台常驻线程 |
-| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（密钥）、`/api/community/*`（社区 key）、`/v1/*`（模型中继） |
+| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（个人密钥）、`/api/private/*`（私有库）、`/api/community/*`（公共库）、`/v1/*`（模型中继） |
 | `database/` | PostgreSQL 数据层（SQLAlchemy），建表逻辑在 `InitDatabase.py` |
-| `database/community/` | 社区 key 池（`otherkey` 表）的增删查、候选调度与用量累计 |
+| `database/community/` | 公共库（`otherkey` 表）的增删查、候选调度与用量累计 |
+| `database/private/` | 私有库（`privatekey` 表）的增删查、按授权范围过滤候选与用量累计 |
 | `protocol/` | 多协议适配层：OpenAI / Anthropic / Gemini 的请求、响应与流式事件双向转换 |
 | `Relay.py` | 中继核心：按 `model` 选候选 key → 协议转换 → 调用上游 |
 | `Mail.py` | 注册验证码邮件发送（163 邮箱 SMTP，配置见 `.env.example`） |
@@ -69,20 +70,32 @@ SMTP_PASSWORD=<163 授权码>
 | --- | --- | --- |
 | `POST` | `/v1/chat/completions` | OpenAI 兼容入站，字段与官方一致，支持 `stream` |
 | `POST` | `/v1/messages` | Anthropic Messages 入站，支持流式 SSE |
-| `GET` | `/v1/models` | 社区池当前可用的模型标识（含 `auto`） |
+| `GET` | `/v1/models` | 当前调用方（公共库 / 私有库）可用的模型标识（含 `auto`） |
 
-鉴权用 `Authorization: Bearer ah-`；调用 Anthropic 入站时也接受 `x-api-key: ah-xxxx`。
-**任意一个有效的 `ah-` 密钥**（个人密钥或社区密钥）都能调用，网关会把本次命中的 key 与模型
-回传到响应头 `X-AIHub-Key` / `X-AIHub-Model`，便于排查路由结果。
+鉴权用 `Authorization: Bearer <key>`；调用 Anthropic 入站时也接受 `x-api-key`。两种 key：
 
-### 社区 key 池与 model 路由
+- **`ah-xxxx`（固定字面量，就是四个 x，不可更换）**：公共库凭证，**任何人**带上它就能调用
+  公共库（社区池）里的全部 key，不需要注册、也不需要新建密钥；
+- **`ah-<id>`（个人密钥）**：只调度**自己**私有库里的上游 key，并且要落在该密钥的 `canuse`
+  授权范围内（为空 = 可以使用全部私有 key）。
 
-「社区 key」指用户把自己的上游厂商 key（OpenAI / Anthropic / Gemini）上传到池子里供所有人共用，
-上传后对外的密钥形态统一是 `ah-xxxx`。`model` 的取值决定怎么挑 key（实现见 `Relay.py`）：
+网关会把本次命中的 key 与模型回传到响应头 `X-AIHub-Key` / `X-AIHub-Model`，便于排查路由结果。
+
+### 两套 key 库与 model 路由
+
+上游厂商的 key（OpenAI / Anthropic / Gemini）分两处存放（实现见 `Relay.py`）：
+
+- **公共库**（`otherkey` 表，导航栏「社区」页）——对所有人开放，调用凭证是固定字面量
+  `ah-xxxx`，无需注册即可使用，库内全部 key 都能被路由到；
+- **私有库**（`privatekey` 表，导航栏「私有库」页）——只给本人的个人密钥 `ah-<id>` 使用。
+  每条个人密钥带一个 `canuse` 授权范围：为空表示可以使用全部私有 key，非空则只在这些 key
+  里路由（公共库、别人的私有 key 都碰不到）；私有库的 id 不是凭证，`ah-<privatekey id>` 无效。
+
+`model` 的取值决定在**所选库内**怎么挑 key：
 
 | `model` 取值 | 行为 |
 | --- | --- |
-| `auto`（或留空） | 在整个池子里按优先级自动挑 |
+| `auto`（或留空） | 在所选库内按优先级自动挑 |
 | 具体模型名 | 先按上传时填写的 `model` 名匹配；全都匹配不上，再按上传者给 key 起的 `name` 兜底 |
 | 全部不匹配 | 找不到任何候选 ⇒ `503 no_available_key` |
 
@@ -105,12 +118,18 @@ SMTP_PASSWORD=<163 授权码>
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/api/key/get` | 当前用户的个人密钥列表 |
+| `POST` | `/api/key/new` | 新建个人密钥，可带 `{"canuse": ["<privatekey id>", ...]}` 指定授权范围（缺省 = 全部私有 key） |
+| `POST` | `/api/key/list` | 当前用户的个人密钥列表（含授权范围 `canuse` / `all`） |
+| `POST` | `/api/key/scope` | 修改某条个人密钥的授权范围，body 传 `{"key": "ah-xxxx", "canuse": [...]}` |
+| `POST` | `/api/key/get` | 个人密钥列表（只返回 `ah-xxxx` 字符串，兼容旧接口） |
 | `POST` | `/api/key/delete` | 吊销（删除）自己的个人密钥，body 传 `{"key": "ah-xxxx"}` |
-| `POST` | `/api/community/pool` | 社区池全部条目（**公开**，无需登录；上游密钥已打码，不返回 `userid`，自己上传的条目标记 `mine=true`） |
-| `POST` | `/api/community/upload` | 上传自己的上游 key 到社区池，返回 `ah-xxxx` |
-| `POST` | `/api/community/list` | 当前用户上传的社区 key（上游密钥已打码，并给出剩余次数） |
-| `POST` | `/api/community/delete` | 删除自己上传的社区 key |
+| `POST` | `/api/private/upload` | 上传自己的上游 key 到私有库（只给自己用），返回 `{"id": "<privatekey id>"}` |
+| `POST` | `/api/private/list` | 我的私有库全部条目（上游密钥已打码，不返回 `userid`） |
+| `POST` | `/api/private/delete` | 删除自己私有库里的某条 key，body 传 `{"id": "..."}` |
+| `POST` | `/api/community/pool` | 公共库全部条目（**公开**，无需登录；上游密钥已打码，不返回 `userid`，自己上传的条目标记 `mine=true`） |
+| `POST` | `/api/community/upload` | 上传自己的上游 key 到公共库 |
+| `POST` | `/api/community/list` | 当前用户上传的公共库 key（上游密钥已打码，并给出剩余次数） |
+| `POST` | `/api/community/delete` | 删除自己上传的公共库 key |
 
 上传字段：`url`、`key`、`model` 必填；`protocol`（`openai` / `anthropic` / `gemini`，缺省 openai）、
 `name`、`priority`（默认 50）、`maxuse`、`text`（备注）可选。
@@ -124,9 +143,10 @@ SMTP_PASSWORD=<163 授权码>
 | `/` | 首页 | 产品介绍、支持的模型、调用示例 |
 | `/register` | 注册 | 两步式：邮箱验证码 → 用户名 / 密码 |
 | `/login` | 登录 | 对应后端 `POST /api/sign` |
-| `/console` | 控制台 | 密钥列表 / 新建密钥 / 吊销密钥（需登录） |
-| `/community` | 社区 | 浏览社区池、上传自己的上游 key、删除自己上传的条目 |
-| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、社区池与模型路由、错误码、SDK 示例 |
+| `/console` | 控制台 | 密钥列表 / 新建密钥 / 设置授权范围 / 吊销密钥（需登录） |
+| `/community` | 社区 | 公共库：固定凭证 `ah-xxxx`、浏览、上传自己的上游 key、删除自己上传的条目 |
+| `/library` | 私有库 | 只给自己用的上游 key：上传 / 删除（需登录） |
+| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、公共库 / 私有库与模型路由、错误码、SDK 示例 |
 | `*` | 404 | 兜底页面 |
 
 ### 本地开发

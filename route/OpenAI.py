@@ -8,4 +8,5 @@ def OpenAI():
 	data = flask.request.get_json()
 	message = data["meaasge"]
 	model = data["model"]
+	...
 	return "OK"

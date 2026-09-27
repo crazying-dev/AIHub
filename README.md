@@ -37,6 +37,27 @@ pnpm build    # vue-tsc 类型检查 + 生产构建到 dist/
 `vite.config.ts` 里已经把 `/api`、`/v1` 代理到 `http://127.0.0.1:2685`，
 所以本地只需另外启动后端（`uv run main.py`）即可联调，不存在跨域问题。
 
+### 部署：Flask 直接接管 dist
+
+生产环境不需要 nginx：后端自身会把打包产物发出去（见 `route/web.py`）。
+
+```bash
+pnpm build
+uv run main.py      # http://127.0.0.1:2685 直接就是前端页面
+```
+
+路由规则：
+
+| 请求 | 行为 |
+| --- | --- |
+| `/`、`/console`、`/docs` … | 返回 `dist/index.html`（history 模式路由刷新不 404） |
+| `/assets/*` | 返回构建产物，`Cache-Control: public, max-age=31536000, immutable` |
+| `/api/*`、`/v1/*` | 只走后端接口，不会被前端吞掉（找不到就 404） |
+| `dist/` 不存在 | 返回 503 与“请先执行 pnpm build”的提示 |
+
+产物目录默认是 `<项目根>/dist`，可用环境变量 `AIHUB_DIST` 指向别处。
+
+
 ### 演示模式（后端未就绪时）
 
 后端核心业务仍在开发中，因此前端做了一层降级：

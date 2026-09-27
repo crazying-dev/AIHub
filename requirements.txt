@@ -1,5 +1,7 @@
 flask
 openai
+anthropic
+google-genai
 python-dotenv
 psycopg2-binary
 sqlalchemy

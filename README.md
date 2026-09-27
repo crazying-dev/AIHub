@@ -8,10 +8,73 @@
 | 路径 | 说明 |
 | --- | --- |
 | `main.py` | 后端入口：启动 Flask（127.0.0.1:2685）与后台常驻线程 |
-| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（密钥）、`/v1/chat/completions`（兼容接口） |
+| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（密钥）、`/api/community/*`（社区 key）、`/v1/*`（模型中继） |
 | `database/` | PostgreSQL 数据层（SQLAlchemy），建表逻辑在 `InitDatabase.py` |
+| `database/community/` | 社区 key 池（`otherkey` 表）的增删查、候选调度与用量累计 |
+| `protocol/` | 多协议适配层：OpenAI / Anthropic / Gemini 的请求、响应与流式事件双向转换 |
+| `Relay.py` | 中继核心：按 `model` 选候选 key → 协议转换 → 调用上游 |
 | `src/` | **前端**：Vue 3 + TypeScript + Vite + vue-router |
 | `public/` | 静态资源（favicon） |
+
+## 后端依赖
+
+```bash
+uv pip install -r requirements.txt
+```
+
+`flask`（Web）、`psycopg2-binary` + `sqlalchemy`（PostgreSQL）、`python-dotenv`（读取 `.env`），
+以及协议适配层使用的官方 SDK：`openai`、`anthropic`、`google-genai`。
+
+## 后端接口
+
+### 模型中继（OpenAI / Anthropic 双协议入站）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/v1/chat/completions` | OpenAI 兼容入站，字段与官方一致，支持 `stream` |
+| `POST` | `/v1/messages` | Anthropic Messages 入站，支持流式 SSE |
+| `GET` | `/v1/models` | 社区池当前可用的模型标识（含 `auto`） |
+
+鉴权用 `Authorization: Bearer ah-`；调用 Anthropic 入站时也接受 `x-api-key: ah-xxxx`。
+**任意一个有效的 `ah-` 密钥**（个人密钥或社区密钥）都能调用，网关会把本次命中的 key 与模型
+回传到响应头 `X-AIHub-Key` / `X-AIHub-Model`，便于排查路由结果。
+
+### 社区 key 池与 model 路由
+
+「社区 key」指用户把自己的上游厂商 key（OpenAI / Anthropic / Gemini）上传到池子里供所有人共用，
+上传后对外的密钥形态统一是 `ah-xxxx`。`model` 的取值决定怎么挑 key（实现见 `Relay.py`）：
+
+| `model` 取值 | 行为 |
+| --- | --- |
+| `auto`（或留空） | 在整个池子里按优先级自动挑 |
+| 具体模型名 | 先按上传时填写的 `model` 名匹配；全都匹配不上，再按上传者给 key 起的 `name` 兜底 |
+| 全部不匹配 | 找不到任何候选 ⇒ `503 no_available_key` |
+
+排序与限额：
+
+- `priority` 数值越大越优先（默认 50），同优先级下按已用次数升序、上传时间升序；
+- 上传时可设置 `maxuse`；**每次真正打到上游就 +1（失败也计）**，用满后该 key 自动跳过，尝试下一个候选；
+- 候选全部调用失败 ⇒ `502 upstream_error`。
+
+### 协议转换
+
+上游支持 `openai` / `anthropic` / `gemini` 三种协议（走各自官方 SDK），入站支持 OpenAI 与 Anthropic。
+`protocol/` 会把入站请求归一化为内部规范格式，再把上游响应 / 流式事件转换回调用方协议，
+因此用 OpenAI 客户端调用一把 Anthropic 上游 key 也是可行的。
+
+> 当前限制：Gemini 上游仅支持文本 / 图片，工具调用不做转换，且不能作为入站协议；
+> 流式调用只在「建立上游请求」阶段失败时才会切换下一个候选，流开始后的上游报错会原样透传给调用方。
+
+### 管理接口（Cookie 鉴权）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/community/upload` | 上传自己的上游 key 到社区池，返回 `ah-xxxx` |
+| `POST` | `/api/community/list` | 当前用户上传的社区 key（上游密钥已打码，并给出剩余次数） |
+| `POST` | `/api/community/delete` | 删除自己上传的社区 key |
+
+上传字段：`url`、`key`、`model` 必填；`protocol`（`openai` / `anthropic` / `gemini`，缺省 openai）、
+`name`、`priority`（默认 50）、`maxuse`、`text`（备注）可选。
 
 ## 前端
 
@@ -22,8 +85,8 @@
 | `/` | 首页 | 产品介绍、支持的模型、调用示例 |
 | `/register` | 注册 | 两步式：邮箱验证码 → 用户名 / 密码 |
 | `/login` | 登录 | 对应后端 `POST /api/sign` |
-| `/console` | 控制台 | 密钥列表 / 新建密钥 / 用量趋势 / 最近调用（需登录） |
-| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、错误码、SDK 示例 |
+| `/console` | 控制台 | 密钥列表 / 新建密钥 / **社区 Key 面板**（上传 / 列表 / 删除 / 用量）/ 用量趋势 / 最近调用（需登录） |
+| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、社区池与模型路由、错误码、SDK 示例 |
 | `*` | 404 | 兜底页面 |
 
 ### 本地开发

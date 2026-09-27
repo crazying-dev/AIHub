@@ -71,12 +71,13 @@ export const api = {
     }
   },
 
-  /** 注册第一步：POST /api/sign/up/1，向后端登记的邮箱发送验证码 */
+  /**
+   * 注册第一步：POST /api/sign/up/1，由后端通过 163 SMTP 发验证码。
+   * 后端会给出具体原因（邮箱格式 / 60 秒冷却 / 邮件服务未配置），这里原样透出。
+   */
   async sendSignUpCode(email: string): Promise<void> {
     const res = await request('/api/sign/up/1', { body: { email } })
-    if (!res.ok) {
-      throw new HttpError(res.status, '验证码发送失败，请稍后重试')
-    }
+    if (!res.ok) throw await failure(res, '验证码发送失败，请稍后重试')
   },
 
   /** 注册第二步：POST /api/sign/up/2，校验验证码并创建用户 */

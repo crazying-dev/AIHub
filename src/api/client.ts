@@ -1,4 +1,5 @@
 import { demo } from '../store/demo'
+import type { CommunityKeyItem } from './mock'
 
 /**
  * 后端接口客户端。
@@ -107,12 +108,99 @@ export const api = {
   async createKey(): Promise<void> {
     const res = await request('/api/key/new')
     if (!res.ok) {
-      throw new HttpError(
-        res.status,
-        res.status === 401 ? '登录状态已失效，请重新登录' : `创建密钥失败（HTTP ${res.status}）`,
-      )
+      throw await failure(res, res.status === 401 ? '登录状态已失效，请重新登录' : '创建密钥失败')
     }
   },
+
+  /** 社区池：当前用户上传的密钥列表：POST /api/community/list */
+  async listCommunityKeys(): Promise<CommunityKeyItem[]> {
+    const res = await request('/api/community/list')
+    if (!res.ok) throw await failure(res, '获取社区密钥失败')
+    const data: unknown = await res.json()
+    if (!Array.isArray(data)) return []
+    return (data as RawCommunityKey[]).map(toCommunityItem)
+  },
+
+  /** 社区池：上传自己的上游 key，返回可直接使用的社区密钥 ah-xxxx：POST /api/community/upload */
+  async uploadCommunityKey(payload: CommunityKeyPayload): Promise<string> {
+    const res = await request('/api/community/upload', { body: payload })
+    if (!res.ok) throw await failure(res, '上传失败')
+    const data = (await res.json()) as { key?: string }
+    return String(data.key ?? '')
+  },
+
+  /** 社区池：删除自己上传的 key：POST /api/community/delete */
+  async deleteCommunityKey(id: string): Promise<void> {
+    const res = await request('/api/community/delete', { body: { id } })
+    if (!res.ok) throw await failure(res, '删除失败')
+  },
+}
+
+/** 上传社区 key 的表单载荷 */
+export interface CommunityKeyPayload {
+  url: string
+  key: string
+  model: string
+  protocol: string
+  name?: string
+  priority?: number
+  maxuse?: number | null
+  text?: string
+}
+
+/** 后端 otherkey 行的原始字段（下划线命名） */
+interface RawCommunityKey {
+  id: string
+  key: string
+  url: string
+  model: string
+  name: string | null
+  protocol: string
+  priority: number
+  maxuse: number | null
+  used: number
+  remaining: number | null
+  enabled: boolean
+  text: string | null
+  created_at: number
+}
+
+function toCommunityItem(raw: RawCommunityKey): CommunityKeyItem {
+  return {
+    id: String(raw.id),
+    key: String(raw.key ?? ''),
+    url: String(raw.url ?? ''),
+    model: String(raw.model ?? ''),
+    name: raw.name ?? null,
+    protocol: String(raw.protocol ?? ''),
+    priority: Number(raw.priority ?? 0),
+    maxuse: raw.maxuse === null || raw.maxuse === undefined ? null : Number(raw.maxuse),
+    used: Number(raw.used ?? 0),
+    remaining: raw.remaining === null || raw.remaining === undefined ? null : Number(raw.remaining),
+    enabled: Boolean(raw.enabled),
+    text: raw.text ?? null,
+    createdAt: Number(raw.created_at ?? 0),
+  }
+}
+
+/** 把后端的错误响应（{error: ...} 或 {error: {message}}）转成可提示的 HttpError */
+async function failure(res: Response, fallback: string): Promise<HttpError> {
+  let message = fallback
+  try {
+    const data: unknown = await res.json()
+    if (data && typeof data === 'object') {
+      const error = (data as { error?: unknown }).error
+      if (typeof error === 'string') {
+        message = error
+      } else if (error && typeof error === 'object') {
+        const inner = (error as { message?: unknown }).message
+        if (typeof inner === 'string') message = inner
+      }
+    }
+  } catch {
+    /* 后端没回 JSON，用兜底文案 */
+  }
+  return new HttpError(res.status, message)
 }
 
 /**

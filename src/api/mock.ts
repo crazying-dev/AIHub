@@ -24,6 +24,23 @@ export interface StatItem {
   tone: 'accent' | 'ok' | 'info'
 }
 
+/** 社区池里的一条密钥（对应后端 otherkey 表，密钥已打码） */
+export interface CommunityKeyItem {
+  id: string
+  key: string
+  url: string
+  model: string
+  name: string | null
+  protocol: string
+  priority: number
+  maxuse: number | null
+  used: number
+  remaining: number | null
+  enabled: boolean
+  text: string | null
+  createdAt: number
+}
+
 export const demoKeys: ApiKeyItem[] = [
   {
     key: 'ah-3f9c1d47-2b6e-4a18-9c02-77ad5e0b1f34',
@@ -63,4 +80,37 @@ export const demoModels: string[] = [
   'deepseek-chat',
   'qwen-max',
   'glm-4-plus',
+]
+
+export const demoCommunityKeys: CommunityKeyItem[] = [
+  {
+    id: 'demo-1',
+    key: 'sk-demo****4f2a',
+    url: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    name: '公司额度',
+    protocol: 'openai',
+    priority: 80,
+    maxuse: 1000,
+    used: 216,
+    remaining: 784,
+    enabled: true,
+    text: '演示数据',
+    createdAt: 1790000000,
+  },
+  {
+    id: 'demo-2',
+    key: 'sk-ant-****9c31',
+    url: 'https://api.anthropic.com',
+    model: 'claude-3-5-sonnet',
+    name: '长文翻译',
+    protocol: 'anthropic',
+    priority: 60,
+    maxuse: 200,
+    used: 200,
+    remaining: 0,
+    enabled: true,
+    text: null,
+    createdAt: 1790100000,
+  },
 ]

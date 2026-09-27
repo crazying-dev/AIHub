@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import CodeBlock from '../components/CodeBlock.vue'
+import CommunityPanel from '../components/CommunityPanel.vue'
 import { api, HttpError, withDemo } from '../api/client'
 import { demo } from '../store/demo'
 import { demoKeys, demoLogs, demoStats } from '../api/mock'
@@ -224,6 +225,8 @@ onMounted(load)
         </section>
       </aside>
     </div>
+
+    <CommunityPanel />
 
     <section class="card">
       <div class="card__head">

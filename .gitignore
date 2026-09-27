@@ -8,7 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# 前端构建产物 dist/ 随仓库一起提交：部署机上没有 Node / pnpm，
+# 直接由 Flask 托管（见 route/web.py）。改动前端后请在本地 pnpm build，
+# 并把 dist/ 一并提交，否则线上仍是旧页面。
 dist-ssr
 *.local
 __pycache__/

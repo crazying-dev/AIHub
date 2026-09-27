@@ -39,7 +39,8 @@ uv run main.py        # 自动安装依赖并启动 Flask（127.0.0.1:2685）
 DATABASE_URL=postgresql://<用户>:<密码>@<主机>:5432/aihub?sslmode=disable
 ```
 
-缺少 `DATABASE_URL` 时会直接抛出明确错误；前端产物 `dist/` 同样不在库里，缺失时 `/` 返回 503（需先 `pnpm build`）。
+缺少 `DATABASE_URL` 时会直接抛出明确错误。
+前端构建产物 `dist/` 已随仓库提交，部署机上不需要 Node / pnpm；若 `dist/` 缺失，`/` 会返回 503 并提示先构建。
 
 ## 后端接口
 
@@ -116,14 +117,20 @@ pnpm build    # vue-tsc 类型检查 + 生产构建到 dist/
 `vite.config.ts` 里已经把 `/api`、`/v1` 代理到 `http://127.0.0.1:2685`，
 所以本地只需另外启动后端（`uv run main.py`）即可联调，不存在跨域问题。
 
+> 提交约定：`dist/` 是入库的。改完 `src/` 后要执行 `pnpm build`，并把 `dist/` 一起提交，
+> 否则部署机拉到的还是旧页面。`vite build` 会清空 `dist/` 再输出（文件名带内容哈希），
+> 所以直接 `git add dist` 即可，不会残留旧产物。
+
 ### 部署：Flask 直接接管 dist
 
 生产环境不需要 nginx：后端自身会把打包产物发出去（见 `route/web.py`）。
 
 ```bash
-pnpm build
-uv run main.py      # http://127.0.0.1:2685 直接就是前端页面
+uv run main.py      # http://127.0.0.1:2685 直接就是前端页面（dist/ 已在仓库里）
 ```
+
+`dist/` 已随仓库提交，因此服务器上不需要安装 Node / pnpm，拉下来即可运行；
+只有改动前端时才需要本地 `pnpm build` 并把 `dist/` 一并提交。
 
 路由规则：
 

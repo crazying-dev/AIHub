@@ -35,6 +35,23 @@ def ListByUser(UserID) -> list:
 	return [ToItem(row) for row in result.mappings().all()]
 
 
+def All(CallerID=None) -> list:
+	"""
+	社区池全部条目（社区页浏览用，按调度优先级排序）
+	上游密钥已打码；**不返回 userid**，仅把调用方自己的条目标记 mine=True
+	return list[dict]
+	"""
+	sql = text(f"SELECT {_COLUMNS} FROM otherkey ORDER BY priority DESC, used ASC, created_at ASC")
+	result = conn.execute(sql)
+	items = []
+	for row in result.mappings().all():
+		item = ToItem(row)
+		Owner = item.pop("userid")
+		item["mine"] = bool(CallerID) and Owner == CallerID
+		items.append(item)
+	return items
+
+
 def GetOne(KeyID):
 	"""
 	按 id 取一条社区 key（含明文 key，仅内部调度使用）

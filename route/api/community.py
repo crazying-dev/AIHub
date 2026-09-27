@@ -1,6 +1,7 @@
 """社区 key 管理接口：任何登录用户都可以上传自己的上游 key 到社区池。
 
 - POST /api/community/upload : 上传，返回可直接使用的 ah-xxxx
+- POST /api/community/pool   : 社区池全部条目（公开浏览，不需要登录）
 - POST /api/community/list   : 当前用户上传的 key 列表（上游密钥已打码）
 - POST /api/community/delete : 删除自己上传的 key
 """
@@ -11,7 +12,7 @@ import protocol
 
 
 def _UserID():
-	"""从 Cookie 取登录态，校验通过返回 UserID，否则 None"""
+	"""从 Cookie 取登录态，校验通过返回 UserID；未登录（或校验失败）返回 None"""
 	Cookies = flask.request.cookies
 	UserID = Cookies.get("id") or Cookies.get("ID")
 	UserToken = Cookies.get("token")
@@ -59,6 +60,12 @@ def CommunityUpload():
 		Priority = 50
 	APIKey = KeyAction.NewCommunityKey(UserID, URL, Key, Protocol, Model, _Text(Data.get("name")), Priority, MaxUse, _Text(Data.get("text")))
 	return flask.jsonify({"key": APIKey})
+
+
+@app.route("/api/community/pool", methods=["POST"])
+def CommunityPool():
+	"""社区池全部条目，公开可浏览（不需要登录）；登录用户自己的条目标记 mine=true"""
+	return flask.jsonify(KeyAction.GetCommunityPool(_UserID()))
 
 
 @app.route("/api/community/list", methods=["POST"])

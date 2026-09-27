@@ -34,5 +34,17 @@ def DeleteCommunityKey(UserID, KeyID) -> bool:
 	return database.community.Delete.Delete(UserID, KeyID)
 
 
+def DeleteKey(UserID, Key) -> bool:
+	"""吊销（删除）自己创建的个人 key，key 带不带 ah- 前缀都行"""
+	if Key and Key.startswith("ah-"):
+		Key = Key[3:]
+	return database.key.Delete.Delete(UserID, Key)
+
+
+def GetCommunityPool(UserID=None):
+	"""社区池全部条目（社区页浏览用，上游密钥已打码；自己的条目标记 mine）"""
+	return database.community.List.All(UserID)
+
+
 Get = database.key.Get.Get
 

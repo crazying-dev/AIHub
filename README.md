@@ -16,14 +16,30 @@
 | `src/` | **前端**：Vue 3 + TypeScript + Vite + vue-router |
 | `public/` | 静态资源（favicon） |
 
-## 后端依赖
+## 运行与环境变量
+
+依赖与版本已锁定在 `pyproject.toml` / `uv.lock` 中，直接用 uv 启动即可：
 
 ```bash
-uv pip install -r requirements.txt
+uv run main.py        # 自动安装依赖并启动 Flask（127.0.0.1:2685）
 ```
 
-`flask`（Web）、`psycopg2-binary` + `sqlalchemy`（PostgreSQL）、`python-dotenv`（读取 `.env`），
+（也可以 `uv pip install -r requirements.txt` 后用 `python main.py` 运行。）
+
+依赖：`flask`（Web）、`psycopg2-binary` + `sqlalchemy`（PostgreSQL）、`python-dotenv`（读取 `.env`），
 以及协议适配层使用的官方 SDK：`openai`、`anthropic`、`google-genai`。
+注意 SQLAlchemy 2.1 起 `postgresql://` 的默认驱动变成了 psycopg(3)，本项目用的是 psycopg2，
+`database/conn.py` 里已把驱动显式指定。
+
+### .env
+
+`.env` 不入库（见 `.gitignore`），部署时需要手动在项目根目录创建：
+
+```bash
+DATABASE_URL=postgresql://<用户>:<密码>@<主机>:5432/aihub?sslmode=disable
+```
+
+缺少 `DATABASE_URL` 时会直接抛出明确错误；前端产物 `dist/` 同样不在库里，缺失时 `/` 返回 503（需先 `pnpm build`）。
 
 ## 后端接口
 

@@ -2,10 +2,13 @@
 
 - POST /v1/chat/completions : OpenAI 协议入站
 - POST /v1/messages         : Anthropic 协议入站
-- GET  /v1/models           : 社区池当前可用的模型标识
+- GET  /v1/models           : 当前调用方可用的模型标识
 
-鉴权：Authorization: Bearer ah-xxxx（Anthropic 入站也接受 x-api-key）。
-路由：model=auto 时选优先级最高的社区 key；填具体模型名时先按上游 model 名匹配，
+鉴权：Authorization: Bearer <key>（Anthropic 入站也接受 x-api-key）。两种 key：
+- 字面量 ah-xxxx：走公共库（社区池 otherkey），任何人都能用，不需要注册；
+- 个人密钥 ah-<id>：只走本人私有库（privatekey），且受该密钥的 canuse 白名单约束。
+
+路由：model=auto 时选优先级最高的可用（公共或私有）key；填具体模型名时先按上游 model 名匹配，
       全部匹配不上，再按上传者给 key 起的 name 匹配。
 """
 from route.app import *
@@ -47,7 +50,7 @@ def _Chat(Protocol):
 		return _Error("messages 不能为空", 400)
 	Stream = bool(Request.get("stream"))
 	try:
-		Result, Row = Relay.Call(Request, Request.get("model"), Stream)
+		Result, Row = Relay.Call(Request, Request.get("model"), Stream, Caller)
 	except Relay.NoKeyError as Error:
 		return _Error(str(Error), 503, "no_available_key")
 	except Relay.UpstreamError as Error:
@@ -75,9 +78,12 @@ def Messages():
 
 @app.route("/v1/models", methods=["GET"])
 def Models():
-	"""社区池当前可用的模型标识（含 auto）"""
-	if database.key.Resolve.ByAPIKey(_APIKey() or "") is None:
+	"""当前调用方（公共库 / 私有库）可用的模型标识（含 auto）"""
+	Caller = database.key.Resolve.ByAPIKey(_APIKey() or "")
+	if Caller is None:
 		return _Error("API Key 无效", 401)
-	Data = [{"id": Name, "object": "model", "created": 0, "owned_by": "community"} for Name in Relay.Models()]
+	if not Caller.get("enabled", True):
+		return _Error("该 API Key 已被停用", 401)
+	Data = [{"id": Name, "object": "model", "created": 0, "owned_by": "aihub"} for Name in Relay.Models(Caller)]
 	return flask.jsonify({"object": "list", "data": Data})
 

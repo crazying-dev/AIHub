@@ -1,6 +1,6 @@
 """
 包含库：
-user | key | keyuse | otherkey | usemessage | email
+user | key | otherkey | privatekey | usemessage | email
 """
 
 from database.conn import conn, text
@@ -38,7 +38,7 @@ def InitKEY():
 
 def InitOtherKey():
 	"""
-	社区 key（otherkey）：用户上传自己的上游 key，统一进入社区池供 /v1 调度。
+	公共库（otherkey）：用户上传自己的上游 key，凭证是固定的字面量 ah-xxxx，任何人带上它都能调用。
 	- name：上传者给这条 key 起的名字（model 匹配不上时按它兜底匹配）
 	- priority：优先级，数字越大越优先（默认 50）
 	- maxuse：调用次数上限，NULL 表示不限
@@ -79,6 +79,45 @@ def InitOtherKey():
 		conn.execute(text(ddl))
 	# 历史行补上时间戳，保证调度排序稳定（已补齐后这条 UPDATE 为空操作）
 	conn.execute(text("UPDATE otherkey SET created_at = 0 WHERE created_at IS NULL"))
+	conn.commit()
+
+def InitPrivateKey():
+	"""
+	私有库（privatekey）：用户上传自己的上游 key，只给本人的个人密钥 ah-<id> 使用。
+	字段与 otherkey 完全一致，区别只在调度来源与可见范围。
+	"""
+	conn.execute(
+		text(
+			"""
+		CREATE TABLE IF NOT EXISTS privatekey (
+			id TEXT PRIMARY KEY,
+			userid TEXT NOT NULL,
+			url TEXT NOT NULL,
+			model TEXT NOT NULL,
+			key TEXT NOT NULL,
+			protocol TEXT NOT NULL,
+			text TEXT,
+			name TEXT,
+			priority INTEGER NOT NULL DEFAULT 50,
+			maxuse INTEGER,
+			used INTEGER NOT NULL DEFAULT 0,
+			enabled BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at BIGINT
+		);
+		"""
+		)
+	)
+	# 与 otherkey 同样的幂等补列，兼容“表已存在但缺列”的老库。
+	for ddl in (
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS name TEXT",
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 50",
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS maxuse INTEGER",
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS used INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE",
+		"ALTER TABLE privatekey ADD COLUMN IF NOT EXISTS created_at BIGINT",
+	):
+		conn.execute(text(ddl))
+	conn.execute(text("UPDATE privatekey SET created_at = 0 WHERE created_at IS NULL"))
 	conn.commit()
 
 def InitUseMessage():

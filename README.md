@@ -40,16 +40,14 @@ SQLAlchemy 2.1 带来两个坑，仓库里已处理：
 
 ```bash
 DATABASE_URL=postgresql://<用户>:<密码>@<主机>:5432/aihub?sslmode=disable
-ENVIRONMENT=development
 ```
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `DATABASE_URL` | 是 | PostgreSQL 连接串（不写驱动时按 psycopg2 处理）；缺失时启动会直接抛出明确错误 |
-| `ENVIRONMENT` | 否 | 值为 `development` 时注册验证码固定 `888888`；**不设置则视为生产环境**，验证码为随机 6 位 |
 
-> 目前注册邮件发送还是占位（`route/api/sign.py` 里的 `# 此处写邮箱发送逻辑`），
-> 生产档下验证码不会发到邮箱，所以现在必须在 `.env` 里配上 `ENVIRONMENT=development` 才能完成注册。
+> 注册验证码是随机 6 位，而注册邮件的发送逻辑还是占位（`route/api/sign.py` 里的
+> `# 此处写邮箱发送逻辑`）：现在收不到邮件，需要从数据库 `email` 表里取 `code` 完成注册。
 
 前端构建产物 `dist/` 已随仓库提交，部署机上不需要 Node / pnpm；若 `dist/` 缺失，`/` 会返回 503 并提示先构建。
 

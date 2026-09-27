@@ -1,18 +1,14 @@
 from route.app import *
 import random
 import database
-import os
 
 @app.route('/api/sign/up/1', methods=["POST"])
 def SignUp1():
 	email = flask.request.get_json().get('email', None)
 	if email is None:
 		return "Error", 401
-	if os.getenv("ENVIRONMENT") == "development":
-		# 开发环境默认888888
-		code = "888888"
-	else:
-		code = f"{random.randint(0, 999999):06d}"
+	# 验证码固定为随机 6 位
+	code = f"{random.randint(0, 999999):06d}"
 	database.Email.NewEmail(email, code)
 	...
 	# 此处写邮箱发送逻辑

@@ -2,7 +2,6 @@
 持续性任务
 """
 from database.conn import conn, text
-import threading
 import time
 
 class main:
@@ -16,9 +15,8 @@ class main:
 		        WHERE CAST(ts AS BIGINT) < :threshold
 		    """)
 		while True:
-			result = conn.execute(sql, {"threshold": self.time_last_5min()})
+			conn.execute(sql, {"threshold": self.time_last_5min()})
 			conn.commit()
-			print(f"已删除邮箱记录，行数：{result.rowcount}")
 			time.sleep(1)
 		
 	def message(self):
@@ -27,7 +25,6 @@ class main:
 		        WHERE CAST(ts AS BIGINT) < :threshold
 		    """)
 		while True:
-			result = conn.execute(sql, {"threshold": self.time_last_30d()})
+			conn.execute(sql, {"threshold": self.time_last_30d()})
 			conn.commit()
-			print(f"已删除消息记录，行数：{result.rowcount}")
 			time.sleep(1)

@@ -11,14 +11,14 @@ const toc = [
   { id: 'quickstart', label: '快速开始' },
   { id: 'auth', label: '鉴权方式' },
   { id: 'chat', label: '对话补全接口' },
-  { id: 'routing', label: '社区池与模型路由' },
+  { id: 'routing', label: '公共库 / 私有库路由' },
   { id: 'management', label: '管理与社区接口' },
   { id: 'errors', label: '错误码' },
   { id: 'sdk', label: 'SDK 示例' },
 ]
 
 const params = [
-  { name: 'model', type: 'string', required: '是', desc: '模型名称；填 auto 时由社区池按优先级自动选择' },
+  { name: 'model', type: 'string', required: '是', desc: '模型名称；填 auto 时由所选库（公共 / 私有）按优先级自动选择' },
   { name: 'messages', type: 'array', required: '是', desc: '对话消息列表，支持 system / user / assistant' },
   { name: 'stream', type: 'boolean', required: '否', desc: '是否流式返回，默认 false' },
   { name: 'temperature', type: 'number', required: '否', desc: '采样温度，0~2，默认 1' },
@@ -27,8 +27,16 @@ const params = [
 
 const routing = [
   {
+    title: '公共库 ah-xxxx',
+    desc: '固定凭证：任何人带上它就能调用公共库（社区池）里的全部 key，不需要注册，也不需要新建密钥。',
+  },
+  {
+    title: '私有库 ah-<id>',
+    desc: '个人密钥只调度本人「私有库」里的上游 key，并且要落在该密钥的授权范围（canuse）内。',
+  },
+  {
     title: 'model: auto',
-    desc: '整个社区池里挑优先级最高的可用 key：priority 越大越优先，其次已用次数少的、上传更早的。',
+    desc: '在所选库内挑优先级最高的可用 key：priority 越大越优先，其次已用次数少的、上传更早的。',
   },
   {
     title: '具体模型名',
@@ -48,13 +56,18 @@ const endpoints = [
   { method: 'POST', path: '/api/sign/up/1', desc: '注册第一步：向邮箱发送验证码' },
   { method: 'POST', path: '/api/sign/up/2', desc: '注册第二步：验证码 + 用户名 + 密码创建账号' },
   { method: 'POST', path: '/api/sign', desc: '登录，成功后在 Cookie 中写入 token / id' },
-  { method: 'POST', path: '/api/key/new', desc: '新建一个个人 API 密钥' },
-  { method: 'POST', path: '/api/key/get', desc: '获取当前用户的个人密钥列表' },
+  { method: 'POST', path: '/api/key/new', desc: '新建个人密钥，可用 canuse 指定授权范围' },
+  { method: 'POST', path: '/api/key/list', desc: '个人密钥列表（含授权范围）' },
+  { method: 'POST', path: '/api/key/scope', desc: '修改某条个人密钥的授权范围' },
+  { method: 'POST', path: '/api/key/get', desc: '个人密钥列表（仅 ah-xxxx 字符串，兼容旧接口）' },
   { method: 'POST', path: '/api/key/delete', desc: '吊销自己的个人密钥' },
-  { method: 'POST', path: '/api/community/pool', desc: '社区池全部条目（公开，上游密钥已打码）' },
-  { method: 'POST', path: '/api/community/upload', desc: '上传自己的上游 key 到社区池，返回 ah-xxxx' },
-  { method: 'POST', path: '/api/community/list', desc: '当前用户上传的社区 key（上游密钥已打码）' },
-  { method: 'POST', path: '/api/community/delete', desc: '删除自己上传的社区 key' },
+  { method: 'POST', path: '/api/private/upload', desc: '上传自己的上游 key 到私有库（只给自己用）' },
+  { method: 'POST', path: '/api/private/list', desc: '我的私有库全部条目（上游密钥已打码）' },
+  { method: 'POST', path: '/api/private/delete', desc: '删除自己私有库里的某条 key' },
+  { method: 'POST', path: '/api/community/pool', desc: '公共库全部条目（公开，上游密钥已打码）' },
+  { method: 'POST', path: '/api/community/upload', desc: '上传自己的上游 key 到公共库' },
+  { method: 'POST', path: '/api/community/list', desc: '当前用户上传的公共库 key（上游密钥已打码）' },
+  { method: 'POST', path: '/api/community/delete', desc: '删除自己上传的公共库 key' },
   { method: 'POST', path: '/v1/chat/completions', desc: 'OpenAI 协议入站的对话补全接口' },
   { method: 'POST', path: '/v1/messages', desc: 'Anthropic 协议入站的对话补全接口' },
   { method: 'GET', path: '/v1/models', desc: '社区池当前可用的模型标识（含 auto）' },
@@ -81,7 +94,7 @@ const errors = [
   { code: '401', title: '未授权', desc: '密钥无效、Cookie 过期或验证码错误，检查 Authorization 头或重新登录。' },
   { code: '400', title: '请求格式错误', desc: 'messages 为空或请求体不是 JSON，检查请求体结构。' },
   { code: '502', title: '上游模型错误', desc: '所有候选 key 都调用失败（上游报错 / 超时），无需修改请求，可直接重试。' },
-  { code: '503', title: '社区池无可用 key', desc: '没有匹配的可用 key，或候选都已用满调用次数；可上传新 key 或稍后重试。' },
+  { code: '503', title: '所选库无可用 key', desc: '公共库 / 你的私有库里都没有匹配的可用 key，或候选都已用满次数；可上传新 key 或稍后重试。' },
 ]
 </script>
 
@@ -115,10 +128,10 @@ const errors = [
           <h2>快速开始</h2>
           <ol class="steps">
             <li><strong>注册账号</strong><span>使用邮箱接收验证码完成注册。</span></li>
-            <li><strong>创建密钥</strong><span>在控制台点击「新建密钥」，得到 <code>ah-</code> 开头的密钥。</span></li>
+            <li><strong>创建密钥</strong><span>在控制台点击「新建密钥」，得到 <code>ah-</code> 开头的密钥，可再点「设置授权范围」勾选它允许使用的私有 key。</span></li>
             <li>
-              <strong>上传社区 key</strong>
-              <span>在「社区」页上传自己的上游 key，供整个社区（包括你自己）调度。</span>
+              <strong>上传上游 key</strong>
+              <span>在「私有库」页上传只给自己用的 key，或在「社区」页共享到公共库。</span>
             </li>
             <li>
               <strong>发起调用</strong>
@@ -131,9 +144,11 @@ const errors = [
         <section id="auth" class="doc-section">
           <h2>鉴权方式</h2>
           <p>
-            调用 <code>/v1</code> 系列接口时，把密钥放在请求头的 <code>Authorization</code> 中：
+            调用 <code>/v1</code> 系列接口时，把密钥放在请求头的 <code>Authorization</code> 中。
+            两种密钥：公共库固定凭证 <code>ah-xxxx</code>（无需注册），或自己在控制台创建的个人密钥
+            <code>ah-&lt;id&gt;</code>（只调度本人私有库）。
           </p>
-          <CodeBlock code="Authorization: Bearer ah-your-key" label="HTTP Header" />
+          <CodeBlock code="Authorization: Bearer ah-xxxx" label="HTTP Header" />
           <p class="note">
             <AppIcon name="lock" :size="15" />
             而管理类接口（注册 / 登录 / 密钥管理）使用登录时下发的 HttpOnly Cookie，
@@ -167,10 +182,11 @@ const errors = [
         </section>
 
         <section id="routing" class="doc-section">
-          <h2>社区池与模型路由</h2>
+          <h2>公共库、私有库与模型路由</h2>
           <p>
-            任何登录用户都可以把自己的上游 key 上传到社区池（导航栏「社区」页）。上传后对外暴露的凭证同样是
-            <code>ah-</code> 开头的社区密钥，任何人都能用它调用 <code>/v1</code>。
+            上游 key 分两处存放：<strong>公共库</strong>（导航栏「社区」页）对所有人开放，固定凭证
+            <code>ah-xxxx</code>；<strong>私有库</strong>（导航栏「私有库」页）只给自己的个人密钥使用，
+            还能按条授权。
           </p>
           <ul class="endpoints">
             <li v-for="item in routing" :key="item.title">

@@ -4,13 +4,13 @@ import { RouterLink, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import CodeBlock from '../components/CodeBlock.vue'
 import { api, HttpError } from '../api/client'
+import type { PersonalKeyItem, PrivateKeyItem } from '../api/types'
 import { session } from '../store/session'
 import { toast } from '../store/toast'
 import { curlQuickstart } from '../data/snippets'
 
-/** 控制台展示的个人密钥（后端只返回 ah-xxxx 列表） */
-interface KeyRow {
-  key: string
+/** 控制台展示的个人密钥（后端 key 表 + 授权范围） */
+interface KeyRow extends PersonalKeyItem {
   label: string
 }
 
@@ -21,14 +21,18 @@ const loading = ref(true)
 const creating = ref(false)
 const error = ref('')
 const keys = ref<KeyRow[]>([])
+const privateKeys = ref<PrivateKeyItem[]>([])
 const revealed = ref<string[]>([])
 const pendingDelete = ref<string | null>(null)
 const deleting = ref<string | null>(null)
+const editing = ref<string | null>(null)
+const draft = ref<string[]>([])
+const savingScope = ref<string | null>(null)
 
 const keyCount = computed(() => keys.value.length)
 
-function toRow(key: string, index: number): KeyRow {
-  return { key, label: index === 0 ? '默认密钥' : `密钥 ${index + 1}` }
+function toRow(item: PersonalKeyItem, index: number): KeyRow {
+  return { ...item, label: index === 0 ? '默认密钥' : `密钥 ${index + 1}` }
 }
 
 function mask(key: string): string {
@@ -52,12 +56,59 @@ async function copyKey(key: string): Promise<void> {
   }
 }
 
+/** 授权范围摘要：为空表示可以使用本人私有库全部 key */
+function scopeText(item: KeyRow): string {
+  if (item.all || !item.canuse.length) return '全部私有 key'
+  return `已授权 ${item.canuse.length} 条`
+}
+
+/** 把私有 key id 换成可读的名字 */
+function privateName(id: string): string {
+  const found = privateKeys.value.find((item) => item.id === id)
+  if (!found) return id
+  return found.name || found.model
+}
+
+function openScope(item: KeyRow): void {
+  editing.value = item.key
+  draft.value = [...item.canuse]
+}
+
+function cancelScope(): void {
+  editing.value = null
+  draft.value = []
+}
+
+function toggleScope(id: string): void {
+  draft.value = draft.value.includes(id)
+    ? draft.value.filter((item) => item !== id)
+    : [...draft.value, id]
+}
+
+async function saveScope(item: KeyRow): Promise<void> {
+  savingScope.value = item.key
+  try {
+    await api.setKeyScope(item.key, draft.value)
+    toast.ok('授权范围已保存')
+    await load()
+    cancelScope()
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : '保存授权范围失败')
+  } finally {
+    savingScope.value = null
+  }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const list = await api.listKeys()
+    const [list, priv] = await Promise.all([
+      api.listPersonalKeys(),
+      api.listPrivateKeys().catch(() => [] as PrivateKeyItem[]),
+    ])
     keys.value = list.map(toRow)
+    privateKeys.value = priv
   } catch (err) {
     if (err instanceof HttpError && err.status === 401) {
       session.signOut()
@@ -76,7 +127,7 @@ async function createKey(): Promise<void> {
   try {
     await api.createKey()
     await load()
-    toast.ok('密钥创建成功')
+    toast.ok('密钥创建成功，默认可以使用私有库全部 key')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : '创建密钥失败')
   } finally {
@@ -108,7 +159,10 @@ onMounted(load)
       <div>
         <span class="eyebrow">控制台</span>
         <h1 class="console__title">你好，{{ profile?.name || '开发者' }}</h1>
-        <p>管理你的 API 密钥。密钥用于调用 <code>/v1</code>，实际由社区池里的上游 key 提供模型能力。</p>
+        <p>
+          这里管理你的个人密钥。调用 <code>/v1</code> 时，密钥只会调度你「私有库」里的上游 key；
+          不配置授权范围时默认可以使用全部私有 key。
+        </p>
       </div>
       <div class="console__head-actions">
         <button class="btn" type="button" @click="load">
@@ -157,10 +211,61 @@ onMounted(load)
             <div class="key-row__main">
               <div class="key-row__title">
                 <strong>{{ item.label }}</strong>
+                <span class="badge">{{ scopeText(item) }}</span>
               </div>
               <code class="key-row__value">{{ mask(item.key) }}</code>
               <div class="key-row__meta">
                 <span>调用时放在 Authorization: Bearer &lt;key&gt;</span>
+                <span v-if="!item.all && item.canuse.length">
+                  限用：
+                  <code v-for="id in item.canuse" :key="id" class="key-row__tag">{{ privateName(id) }}</code>
+                </span>
+              </div>
+
+              <div class="scope">
+                <button
+                  v-if="editing !== item.key"
+                  class="btn btn--sm"
+                  type="button"
+                  @click="openScope(item)"
+                >
+                  <AppIcon name="lock" :size="14" />
+                  设置授权范围
+                </button>
+                <template v-else>
+                  <p class="scope__hint">
+                    勾选这条密钥可以调度的私有库 key；一条都不勾选 = 可以使用私有库全部 key。
+                  </p>
+                  <div v-if="privateKeys.length" class="scope__list">
+                    <button
+                      v-for="p in privateKeys"
+                      :key="p.id"
+                      type="button"
+                      class="scope__item"
+                      :class="{ 'scope__item--on': draft.includes(p.id) }"
+                      @click="toggleScope(p.id)"
+                    >
+                      <AppIcon :name="draft.includes(p.id) ? 'check' : 'dot'" :size="14" />
+                      <span class="scope__name">{{ p.name || p.model }}</span>
+                      <code class="scope__proto">{{ p.protocol }}</code>
+                    </button>
+                  </div>
+                  <p v-else class="muted scope__empty">
+                    私有库还没有 key，<RouterLink to="/library">先去上传一条</RouterLink>。
+                  </p>
+                  <div class="scope__actions">
+                    <button
+                      class="btn btn--sm btn--primary"
+                      type="button"
+                      :disabled="savingScope === item.key"
+                      @click="saveScope(item)"
+                    >
+                      {{ savingScope === item.key ? '保存中…' : '保存' }}
+                    </button>
+                    <button class="btn btn--sm" type="button" @click="cancelScope">取消</button>
+                    <span class="muted">{{ draft.length ? `已选 ${draft.length} 条` : '全部私有 key' }}</span>
+                  </div>
+                </template>
               </div>
             </div>
             <div class="key-row__actions">
@@ -204,7 +309,23 @@ onMounted(load)
       <aside class="console__side">
         <section class="card">
           <div class="card__head">
-            <h3>社区池</h3>
+            <h3>私有库</h3>
+            <RouterLink class="quick__link" to="/library">
+              前往私有库
+              <AppIcon name="arrow-right" :size="13" />
+            </RouterLink>
+          </div>
+          <div class="card__body">
+            <p class="side__text">
+              私有库里的上游 key 只给你的个人密钥使用，还能按条授权：某条密钥只勾选哪几条，
+              调用时就只在这些 key 里按 <code>model</code> 路由。
+            </p>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card__head">
+            <h3>公共库</h3>
             <RouterLink class="quick__link" to="/community">
               前往社区
               <AppIcon name="arrow-right" :size="13" />
@@ -212,8 +333,8 @@ onMounted(load)
           </div>
           <div class="card__body">
             <p class="side__text">
-              社区池汇集了大家上传的上游 key，你的 <code>ah-</code> 密钥会按
-              <code>model</code> 自动路由过去。<code>model: auto</code> 时优先选择优先级更高的 key。
+              公共库对所有人开放，固定凭证是 <code>ah-xxxx</code>，不用注册就能调用。
+              想贡献自己的上游 key，可在社区页上传。
             </p>
           </div>
         </section>
@@ -319,7 +440,7 @@ onMounted(load)
 
 .key-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   padding: 14px 16px;
   border: 1px solid var(--border);
@@ -343,6 +464,7 @@ onMounted(load)
 
 .key-row__title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -359,15 +481,88 @@ onMounted(load)
 .key-row__meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 14px;
   font-size: 12.5px;
   color: var(--text-soft);
+}
+
+.key-row__tag {
+  margin-right: 4px;
+  font-size: 12px;
 }
 
 .key-row__actions {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* 授权范围编辑器 */
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 2px;
+}
+
+.scope__hint {
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.scope__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scope__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-elev);
+  color: var(--text-muted);
+  font: 500 13px/1.4 var(--sans);
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.scope__item:hover {
+  color: var(--text-h);
+}
+
+.scope__item--on {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.scope__name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope__proto {
+  font-size: 11.5px;
+  opacity: 0.75;
+}
+
+.scope__empty {
+  font-size: 13px;
+}
+
+.scope__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .icon-btn {

@@ -16,6 +16,7 @@ const { current: themeMode } = theme
 const navItems = [
   { name: 'home', label: '首页', to: '/' },
   { name: 'community', label: '社区', to: '/community' },
+  { name: 'library', label: '私有库', to: '/library' },
   { name: 'docs', label: '接入文档', to: '/docs' },
   { name: 'console', label: '控制台', to: '/console' },
 ] as const

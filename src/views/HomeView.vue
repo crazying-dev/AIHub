@@ -23,13 +23,13 @@ const features = [
   },
   {
     icon: 'shield',
-    title: '密钥隔离与限额',
-    desc: '每个项目独立密钥，支持停用与限流，泄露可一键吊销，不影响其他业务。',
+    title: '密钥隔离与授权范围',
+    desc: '每个项目独立密钥，一键吊销；还能指定它只允许使用私有库里的哪几条上游 key。',
   },
   {
-    icon: 'chart',
-    title: '用量可观测',
-    desc: '请求量、Token 消耗与延迟一目了然，超预算前就能发现异常调用。',
+    icon: 'lock',
+    title: '公共 / 私有两套 key 库',
+    desc: '公共库用固定凭证 ah-xxxx 共享给所有人；私有库只给自己的密钥用，随手可删。',
   },
 ]
 
@@ -91,11 +91,12 @@ const features = [
         <span class="eyebrow">支持的模型</span>
         <h2>一个密钥，跨厂商调用</h2>
         <p>
-          可用模型由社区池决定：成员上传的上游 key 会声明自己支持的 <code>model</code>，
+          可用模型由两处 key 库决定：公共库（凭证 <code>ah-xxxx</code>）对所有人开放，
+          私有库只给你的个人密钥用。上传的 key 会声明自己支持的 <code>model</code>，
           网关按 <code>model</code> 名路由；填 <code>auto</code> 会自动选择优先级更高的可用 key。
         </p>
         <p>调用时只需修改请求体里的 <code>model</code> 字段，其余参数与 OpenAI 完全一致。</p>
-        <RouterLink class="link" to="/community">去社区池看看有哪些可用模型
+        <RouterLink class="link" to="/community">去公共库看看有哪些可用模型
           <AppIcon name="arrow-right" :size="14" />
         </RouterLink>
       </div>

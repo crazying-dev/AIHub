@@ -36,6 +36,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '社区' },
   },
   {
+    path: '/library',
+    name: 'library',
+    component: () => import('../views/LibraryView.vue'),
+    meta: { title: '私有库', requiresAuth: true },
+  },
+  {
     path: '/docs',
     name: 'docs',
     component: () => import('../views/DocsView.vue'),

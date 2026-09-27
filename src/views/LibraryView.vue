@@ -1,35 +1,27 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { api } from '../api/client'
-import type { CommunityKeyItem } from '../api/types'
-import { session } from '../store/session'
+import type { PrivateKeyItem } from '../api/types'
 import { toast } from '../store/toast'
 
 /**
- * 社区页（公共库）：浏览 / 上传 / 删除公共库里的上游 key。
+ * 私有库页：上传 / 管理只给自己用的上游 key。
  *
- * 对应后端 route/api/community.py：
- * - POST /api/community/pool   公开浏览全部条目（登录后自己上传的条目 mine = true）
- * - POST /api/community/upload 登录后上传自己的上游 key
- * - POST /api/community/delete 删除自己上传的条目
+ * 对应后端 route/api/private.py：
+ * - POST /api/private/list   当前用户私有库全部条目
+ * - POST /api/private/upload 上传自己的上游 key
+ * - POST /api/private/delete 删除某条 key
  *
- * 公共库的调用凭证是固定字面量 ah-xxxx：任何人带上它就能用公共库全部 key，无需注册。
- * 想只给自己用，请改用「私有库」+ 自己的个人密钥。
+ * 谁能用到它们：你在「控制台」创建的个人密钥 ah-<id>；并且要落在该密钥的「授权范围」里
+ * （一条都不勾选 = 可以使用私有库全部 key）。公共库的固定凭证 ah-xxxx 碰不到私有库。
  */
-const router = useRouter()
-const { isAuthed } = session
-
-/** 公共库固定凭证：就是这四个 x，不可更换 */
-const PUBLIC_KEY = 'ah-xxxx'
-
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
-const items = ref<CommunityKeyItem[]>([])
+const items = ref<PrivateKeyItem[]>([])
 const formOpen = ref(false)
-const filter = ref<'all' | 'mine'>('all')
 const pendingDelete = ref<string | null>(null)
 const deleting = ref<string | null>(null)
 
@@ -50,23 +42,17 @@ const form = reactive({
   text: '',
 })
 
-const mineCount = computed(() => items.value.filter((item) => item.mine).length)
-
-const visible = computed(() =>
-  filter.value === 'mine' ? items.value.filter((item) => item.mine) : items.value,
-)
-
-function percent(item: CommunityKeyItem): number {
+function percent(item: PrivateKeyItem): number {
   if (!item.maxuse) return 0
   return Math.min(100, Math.round((item.used / item.maxuse) * 100))
 }
 
-function usageText(item: CommunityKeyItem): string {
+function usageText(item: PrivateKeyItem): string {
   if (item.maxuse === null) return `${item.used} 次 / 不限`
   return `${item.used} / ${item.maxuse} 次`
 }
 
-function healthy(item: CommunityKeyItem): boolean {
+function healthy(item: PrivateKeyItem): boolean {
   return item.enabled && (item.remaining === null || item.remaining > 0)
 }
 
@@ -74,21 +60,15 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    items.value = await api.listCommunityPool()
+    items.value = await api.listPrivateKeys()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '公共库加载失败'
+    error.value = err instanceof Error ? err.message : '私有库加载失败'
   } finally {
     loading.value = false
   }
 }
 
 function toggleForm(): void {
-  // 未登录先引导登录，登录后回到本页
-  if (!isAuthed.value && !formOpen.value) {
-    toast.info('登录后即可上传自己的上游 key')
-    void router.push({ name: 'login', query: { redirect: '/community' } })
-    return
-  }
   formOpen.value = !formOpen.value
 }
 
@@ -99,7 +79,7 @@ async function submit(): Promise<void> {
   }
   saving.value = true
   try {
-    await api.uploadCommunityKey({
+    await api.uploadPrivateKey({
       url: form.url.trim(),
       key: form.key.trim(),
       model: form.model.trim(),
@@ -109,7 +89,7 @@ async function submit(): Promise<void> {
       maxuse: form.maxuse === '' ? null : Number(form.maxuse),
       text: form.text.trim() || undefined,
     })
-    toast.ok('上传成功，已加入公共库')
+    toast.ok('上传成功，已加入私有库')
     form.key = ''
     await load()
   } catch (err) {
@@ -119,11 +99,11 @@ async function submit(): Promise<void> {
   }
 }
 
-async function remove(item: CommunityKeyItem): Promise<void> {
+async function remove(item: PrivateKeyItem): Promise<void> {
   deleting.value = item.id
   try {
-    await api.deleteCommunityKey(item.id)
-    toast.ok('已从公共库删除')
+    await api.deletePrivateKey(item.id)
+    toast.ok('已从私有库删除')
     await load()
   } catch (err) {
     toast.error(err instanceof Error ? err.message : '删除失败')
@@ -133,30 +113,21 @@ async function remove(item: CommunityKeyItem): Promise<void> {
   }
 }
 
-async function copy(value: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(value)
-    toast.ok('已复制到剪贴板')
-  } catch {
-    toast.error('浏览器拒绝了剪贴板访问，请手动复制')
-  }
-}
-
 onMounted(load)
 </script>
 
 <template>
-  <div class="page community">
-    <header class="community__head">
+  <div class="page library">
+    <header class="library__head">
       <div>
-        <span class="eyebrow">社区</span>
-        <h1 class="community__title">公共库</h1>
-        <p class="community__lead">
-          这里汇集社区成员上传的上游 key，对所有人开放：带上下面的固定凭证
-          <code>{{ PUBLIC_KEY }}</code> 就能调用，不需要注册。
+        <span class="eyebrow">私有库</span>
+        <h1 class="library__title">只给自己用的上游 key</h1>
+        <p class="library__lead">
+          私有库里的 key 只有你自己的个人密钥 <code>ah-&lt;id&gt;</code> 能调度，
+          而且还要落在该密钥的「授权范围」里。公共库的 <code>ah-xxxx</code> 完全碰不到这里。
         </p>
       </div>
-      <div class="community__head-actions">
+      <div class="library__head-actions">
         <button class="btn" type="button" @click="load">
           <AppIcon name="clock" :size="16" />
           刷新
@@ -168,27 +139,17 @@ onMounted(load)
       </div>
     </header>
 
-    <section class="card public">
-      <div class="public__body">
-        <div class="public__text">
-          <h3>公共库凭证</h3>
-          <p class="muted">
-            任何人带上它就能调用公共库里的全部 key，无需注册、无需新建密钥；
-            <code>model: auto</code> 时按优先级自动挑一条可用 key。
-          </p>
-        </div>
-        <div class="public__key">
-          <code>{{ PUBLIC_KEY }}</code>
-          <button class="btn" type="button" @click="copy(PUBLIC_KEY)">
-            <AppIcon name="copy" :size="15" />
-            复制
-          </button>
-        </div>
-      </div>
-    </section>
+    <p class="alert alert--info library__tip">
+      <AppIcon name="lock" :size="15" />
+      <span>
+        想限定某条个人密钥只能用其中几条？去
+        <RouterLink to="/console">控制台</RouterLink>
+        点它的「授权范围」勾选即可；一条都不勾选表示可以使用全部私有 key。
+      </span>
+    </p>
 
-    <form v-if="formOpen && isAuthed" class="card community__form" @submit.prevent="submit">
-      <div class="community__form-grid">
+    <form v-if="formOpen" class="card library__form" @submit.prevent="submit">
+      <div class="library__form-grid">
         <label class="field">
           <span class="field__label">上游地址 base_url <i>*</i></span>
           <input v-model="form.url" class="input input--mono" placeholder="https://api.openai.com/v1" />
@@ -211,11 +172,11 @@ onMounted(load)
         <label class="field">
           <span class="field__label">模型名 <i>*</i></span>
           <input v-model="form.model" class="input input--mono" placeholder="gpt-4o-mini" />
-          <span class="field__hint">调用方填这个名字（或 auto）就会路由到这条 key</span>
+          <span class="field__hint">你的密钥填这个名字（或 auto）就会路由到这条 key</span>
         </label>
         <label class="field">
           <span class="field__label">命名（可选）</span>
-          <input v-model="form.name" class="input" placeholder="例如：长文翻译" />
+          <input v-model="form.name" class="input" placeholder="例如：生产环境" />
           <span class="field__hint">模型名都匹配不上时，按这个命名兜底匹配</span>
         </label>
         <label class="field">
@@ -233,13 +194,11 @@ onMounted(load)
           <input v-model="form.text" class="input" placeholder="给自己的说明" />
         </label>
       </div>
-      <div class="row row--between community__submit">
-        <span class="muted">
-          上传后所有人（包括未注册的调用方）都能通过 <code>{{ PUBLIC_KEY }}</code> 用到它。
-        </span>
+      <div class="row row--between library__submit">
+        <span class="muted">上传后可随时删除，只会影响这一条 key。</span>
         <button class="btn btn--primary" type="submit" :disabled="saving">
           <AppIcon name="plus" :size="16" />
-          {{ saving ? '上传中…' : '上传到公共库' }}
+          {{ saving ? '上传中…' : '上传到私有库' }}
         </button>
       </div>
     </form>
@@ -250,44 +209,26 @@ onMounted(load)
       <button class="btn btn--sm" type="button" @click="load">重试</button>
     </p>
 
-    <div class="community__bar">
-      <div class="community__filters">
-        <button
-          type="button"
-          class="filter"
-          :class="{ 'filter--active': filter === 'all' }"
-          @click="filter = 'all'"
-        >
-          全部 · {{ items.length }}
-        </button>
-        <button
-          v-if="isAuthed"
-          type="button"
-          class="filter"
-          :class="{ 'filter--active': filter === 'mine' }"
-          @click="filter = 'mine'"
-        >
-          我上传的 · {{ mineCount }}
-        </button>
-      </div>
-      <RouterLink v-if="!isAuthed" class="community__login" to="/login">
-        登录后可上传与管理自己的 key
+    <div class="library__bar">
+      <span class="badge"><AppIcon name="lock" :size="12" />共 {{ items.length }} 条</span>
+      <RouterLink class="library__link" to="/console">
+        去控制台管理授权范围
         <AppIcon name="arrow-right" :size="13" />
       </RouterLink>
     </div>
 
-    <div v-if="loading" class="community__list">
-      <div v-for="n in 3" :key="n" class="skeleton community__skeleton" />
+    <div v-if="loading" class="library__list">
+      <div v-for="n in 3" :key="n" class="skeleton library__skeleton" />
     </div>
 
-    <div v-else-if="!visible.length" class="card community__empty">
-      <AppIcon name="globe" :size="22" />
-      <h3>{{ filter === 'mine' ? '你还没有上传过 key' : '公共库还是空的' }}</h3>
-      <p>上传第一条上游 key，所有人就都能用它调用 /v1。</p>
+    <div v-else-if="!items.length" class="card library__empty">
+      <AppIcon name="lock" :size="22" />
+      <h3>私有库还是空的</h3>
+      <p>上传第一条上游 key，它只会被你的个人密钥调度。</p>
     </div>
 
-    <ul v-else class="community__list">
-      <li v-for="item in visible" :key="item.id" class="crow">
+    <ul v-else class="library__list">
+      <li v-for="item in items" :key="item.id" class="crow">
         <div class="crow__main">
           <div class="crow__title">
             <strong>{{ item.name || item.model }}</strong>
@@ -296,7 +237,6 @@ onMounted(load)
               {{ !item.enabled ? '已停用' : healthy(item) ? '可用' : '已用满' }}
             </span>
             <span class="badge">优先级 {{ item.priority }}</span>
-            <span v-if="item.mine" class="badge badge--ok">我上传的</span>
           </div>
           <code class="crow__value">{{ item.key }}</code>
           <div class="crow__meta">
@@ -310,30 +250,27 @@ onMounted(load)
           </div>
         </div>
         <div class="crow__actions">
-          <template v-if="item.mine">
-            <template v-if="pendingDelete === item.id">
-              <button
-                class="btn btn--sm btn--danger"
-                type="button"
-                :disabled="deleting === item.id"
-                @click="remove(item)"
-              >
-                {{ deleting === item.id ? '删除中…' : '确认删除' }}
-              </button>
-              <button class="btn btn--sm" type="button" @click="pendingDelete = null">取消</button>
-            </template>
-            <template v-else>
-              <button
-                class="icon-btn icon-btn--danger"
-                type="button"
-                title="删除这条 key"
-                @click="pendingDelete = item.id"
-              >
-                <AppIcon name="trash" :size="15" />
-              </button>
-            </template>
+          <template v-if="pendingDelete === item.id">
+            <button
+              class="btn btn--sm btn--danger"
+              type="button"
+              :disabled="deleting === item.id"
+              @click="remove(item)"
+            >
+              {{ deleting === item.id ? '删除中…' : '确认删除' }}
+            </button>
+            <button class="btn btn--sm" type="button" @click="pendingDelete = null">取消</button>
           </template>
-          <span v-else class="crow__owner">他人上传</span>
+          <template v-else>
+            <button
+              class="icon-btn icon-btn--danger"
+              type="button"
+              title="删除这条 key"
+              @click="pendingDelete = item.id"
+            >
+              <AppIcon name="trash" :size="15" />
+            </button>
+          </template>
         </div>
       </li>
     </ul>
@@ -341,13 +278,13 @@ onMounted(load)
 </template>
 
 <style scoped>
-.community {
+.library {
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.community__head {
+.library__head {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
@@ -355,82 +292,39 @@ onMounted(load)
   justify-content: space-between;
 }
 
-.community__title {
+.library__title {
   margin: 6px 0 6px;
   font-size: 30px;
 }
 
-.community__lead {
+.library__lead {
   max-width: 66ch;
   line-height: 1.7;
 }
 
-.community__head-actions {
+.library__head-actions {
   display: flex;
   gap: 10px;
 }
 
-/* 公共库固定凭证 */
-.public {
-  border-color: var(--accent-border);
-  background: linear-gradient(
-    120deg,
-    var(--accent-bg),
-    color-mix(in srgb, var(--brand-2) 6%, var(--bg-elev))
-  );
-}
-
-.public__body {
-  display: flex;
-  flex-wrap: wrap;
+.library__tip {
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px 22px;
 }
 
-.public__text {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.public__text p {
-  max-width: 62ch;
-  font-size: 14.5px;
-  line-height: 1.65;
-}
-
-.public__key {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.public__key code {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--code-bg);
-  color: var(--code-text);
-  font-size: 16px;
-  letter-spacing: 0.04em;
-}
-
-.community__form {
+.library__form {
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.community__form-grid {
+.library__form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.community__submit {
+.library__submit {
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -441,7 +335,7 @@ onMounted(load)
   margin-left: 3px;
 }
 
-.community__bar {
+.library__bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -449,40 +343,14 @@ onMounted(load)
   gap: 12px;
 }
 
-.community__filters {
-  display: flex;
-  gap: 8px;
-}
-
-.filter {
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--bg-elev);
-  color: var(--text-muted);
-  font: 500 13.5px/1.4 var(--sans);
-  cursor: pointer;
-  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
-}
-
-.filter:hover {
-  color: var(--text-h);
-}
-
-.filter--active {
-  color: var(--accent);
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
-}
-
-.community__login {
+.library__link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 14px;
 }
 
-.community__list {
+.library__list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -491,11 +359,11 @@ onMounted(load)
   gap: 10px;
 }
 
-.community__skeleton {
+.library__skeleton {
   height: 104px;
 }
 
-.community__empty {
+.library__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -505,7 +373,7 @@ onMounted(load)
   color: var(--text-soft);
 }
 
-.community__empty h3 {
+.library__empty h3 {
   color: var(--text-h);
 }
 
@@ -591,11 +459,6 @@ onMounted(load)
   gap: 6px;
 }
 
-.crow__owner {
-  font-size: 12.5px;
-  color: var(--text-soft);
-}
-
 .icon-btn {
   display: grid;
   place-items: center;
@@ -619,7 +482,7 @@ onMounted(load)
 }
 
 @media (max-width: 720px) {
-  .community__form-grid {
+  .library__form-grid {
     grid-template-columns: 1fr;
   }
 }

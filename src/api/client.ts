@@ -1,4 +1,4 @@
-import type { CommunityKeyItem } from './types'
+import type { CommunityKeyItem, PersonalKeyItem, PrivateKeyItem } from './types'
 
 /**
  * 后端接口客户端。
@@ -58,8 +58,8 @@ interface SignUpPayload {
   password: string
 }
 
-/** 上传社区 key 的表单载荷 */
-export interface CommunityKeyPayload {
+/** 上传上游 key 的表单载荷（公共库与私有库结构一致） */
+export interface UpstreamKeyPayload {
   url: string
   key: string
   model: string
@@ -102,9 +102,9 @@ export const api = {
     }
   },
 
-  /** 查询当前用户的密钥列表：POST /api/key/get -> ["ah-xxx", ...] */
-  async listKeys(): Promise<string[]> {
-    const res = await request('/api/key/get')
+  /** 当前用户的个人密钥列表（含授权范围）：POST /api/key/list */
+  async listPersonalKeys(): Promise<PersonalKeyItem[]> {
+    const res = await request('/api/key/list')
     if (!res.ok) {
       throw new HttpError(
         res.status,
@@ -113,13 +113,23 @@ export const api = {
     }
     const data: unknown = await res.json()
     if (!Array.isArray(data)) return []
-    return data.map((item) => String(item))
+    return (data as RawPersonalKey[]).map((raw) => ({
+      key: String(raw.key ?? ''),
+      canuse: Array.isArray(raw.canuse) ? raw.canuse.map((id) => String(id)) : [],
+      all: Boolean(raw.all),
+    }))
   },
 
-  /** 新建密钥：POST /api/key/new */
-  async createKey(): Promise<void> {
-    const res = await request('/api/key/new')
+  /** 新建个人密钥：POST /api/key/new，canuse 为空表示可以使用本人私有库全部 key */
+  async createKey(canuse: string[] = []): Promise<void> {
+    const res = await request('/api/key/new', { body: { canuse } })
     if (!res.ok) throw await failure(res, res.status === 401 ? '状态已失效，请重新登录' : '创建密钥失败')
+  },
+
+  /** 修改某条个人密钥的授权范围：POST /api/key/scope */
+  async setKeyScope(key: string, canuse: string[]): Promise<void> {
+    const res = await request('/api/key/scope', { body: { key, canuse } })
+    if (!res.ok) throw await failure(res, '保存授权范围失败')
   },
 
   /** 吊销（删除）自己的个人密钥：POST /api/key/delete，key 带不带 ah- 前缀都行 */
@@ -128,32 +138,62 @@ export const api = {
     if (!res.ok) throw await failure(res, '吊销失败')
   },
 
-  /** 社区池全部条目：POST /api/community/pool（公开可浏览，自己的条目标记 mine） */
-  async listCommunityPool(): Promise<CommunityKeyItem[]> {
-    const res = await request('/api/community/pool')
-    if (!res.ok) throw await failure(res, '社区池加载失败')
+  /** 我的私有库全部条目：POST /api/private/list */
+  async listPrivateKeys(): Promise<PrivateKeyItem[]> {
+    const res = await request('/api/private/list')
+    if (!res.ok) throw await failure(res, '私有库加载失败')
     const data: unknown = await res.json()
     if (!Array.isArray(data)) return []
-    return (data as RawCommunityKey[]).map(toCommunityItem)
+    return (data as RawUpstreamKey[]).map(toUpstreamItem)
   },
 
-  /** 社区池：上传自己的上游 key，返回可直接使用的社区密钥 ah-xxxx：POST /api/community/upload */
-  async uploadCommunityKey(payload: CommunityKeyPayload): Promise<string> {
+  /** 私有库：上传自己的上游 key：POST /api/private/upload，返回私有 key id */
+  async uploadPrivateKey(payload: UpstreamKeyPayload): Promise<string> {
+    const res = await request('/api/private/upload', { body: payload })
+    if (!res.ok) throw await failure(res, '上传失败')
+    const data = (await res.json()) as { id?: string }
+    return String(data.id ?? '')
+  },
+
+  /** 私有库：删除某条 key：POST /api/private/delete */
+  async deletePrivateKey(id: string): Promise<void> {
+    const res = await request('/api/private/delete', { body: { id } })
+    if (!res.ok) throw await failure(res, '删除失败')
+  },
+
+  /** 公共库全部条目：POST /api/community/pool（公开可浏览，自己的条目标记 mine） */
+  async listCommunityPool(): Promise<CommunityKeyItem[]> {
+    const res = await request('/api/community/pool')
+    if (!res.ok) throw await failure(res, '公共库加载失败')
+    const data: unknown = await res.json()
+    if (!Array.isArray(data)) return []
+    return (data as RawUpstreamKey[]).map(toCommunityItem)
+  },
+
+  /** 公共库：上传自己的上游 key：POST /api/community/upload */
+  async uploadCommunityKey(payload: UpstreamKeyPayload): Promise<string> {
     const res = await request('/api/community/upload', { body: payload })
     if (!res.ok) throw await failure(res, '上传失败')
     const data = (await res.json()) as { key?: string }
     return String(data.key ?? '')
   },
 
-  /** 社区池：删除自己上传的 key：POST /api/community/delete */
+  /** 公共库：删除自己上传的 key：POST /api/community/delete */
   async deleteCommunityKey(id: string): Promise<void> {
     const res = await request('/api/community/delete', { body: { id } })
     if (!res.ok) throw await failure(res, '删除失败')
   },
 }
 
-/** 后端 otherkey 行的原始字段（下划线命名，mine 由 pool 接口按登录态给出） */
-interface RawCommunityKey {
+/** 后端 key 行的原始字段（下划线命名） */
+interface RawPersonalKey {
+  key: string
+  canuse?: string[] | null
+  all?: boolean
+}
+
+/** 后端 otherkey / privatekey 行的原始字段（下划线命名，mine 由 pool 接口按登录态给出） */
+interface RawUpstreamKey {
   id: string
   key: string
   url: string
@@ -170,7 +210,7 @@ interface RawCommunityKey {
   mine?: boolean
 }
 
-function toCommunityItem(raw: RawCommunityKey): CommunityKeyItem {
+function toUpstreamItem(raw: RawUpstreamKey): PrivateKeyItem {
   return {
     id: String(raw.id),
     key: String(raw.key ?? ''),
@@ -185,8 +225,11 @@ function toCommunityItem(raw: RawCommunityKey): CommunityKeyItem {
     enabled: Boolean(raw.enabled),
     text: raw.text ?? null,
     createdAt: Number(raw.created_at ?? 0),
-    mine: Boolean(raw.mine),
   }
+}
+
+function toCommunityItem(raw: RawUpstreamKey): CommunityKeyItem {
+  return { ...toUpstreamItem(raw), mine: Boolean(raw.mine) }
 }
 
 /** 把后端的错误响应（{error: ...} 或 {error: {message}}）转成可提示的 HttpError */

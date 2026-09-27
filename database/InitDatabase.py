@@ -37,6 +37,15 @@ def InitKEY():
 	conn.commit()
 
 def InitOtherKey():
+	"""
+	社区 key（otherkey）：用户上传自己的上游 key，统一进入社区池供 /v1 调度。
+	- name：上传者给这条 key 起的名字（model 匹配不上时按它兜底匹配）
+	- priority：优先级，数字越大越优先（默认 50）
+	- maxuse：调用次数上限，NULL 表示不限
+	- used：已调用次数
+	- enabled：是否参与调度
+	- created_at：上传时间（unix 秒）
+	"""
 	conn.execute(
 		text(
 			"""
@@ -47,11 +56,29 @@ def InitOtherKey():
 			model TEXT NOT NULL,
 			key TEXT NOT NULL,
 			protocol TEXT NOT NULL,
-			text TEXT
+			text TEXT,
+			name TEXT,
+			priority INTEGER NOT NULL DEFAULT 50,
+			maxuse INTEGER,
+			used INTEGER NOT NULL DEFAULT 0,
+			enabled BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at BIGINT
 		);
 		"""
 		)
 	)
+	# 老库升级：CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，这里逐列幂等补齐。
+	for ddl in (
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS name TEXT",
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 50",
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS maxuse INTEGER",
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS used INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE",
+		"ALTER TABLE otherkey ADD COLUMN IF NOT EXISTS created_at BIGINT",
+	):
+		conn.execute(text(ddl))
+	# 历史行补上时间戳，保证调度排序稳定（已补齐后这条 UPDATE 为空操作）
+	conn.execute(text("UPDATE otherkey SET created_at = 0 WHERE created_at IS NULL"))
 	conn.commit()
 
 def InitUseMessage():

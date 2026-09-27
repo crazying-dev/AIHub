@@ -2,6 +2,9 @@ import time
 from database.conn import conn, text
 
 def NewEmail(email, code):
+	"""
+	储存新的email验证码
+	"""
 	sql = text("""
 			INSERT INTO email (email, code, ts)
 			VALUES (:email, :code, :ts)
@@ -14,6 +17,10 @@ def NewEmail(email, code):
 	conn.commit()
 
 def Verify(email, code):
+	"""
+	验证email验证码
+	return bool
+	"""
 	sql = text("""
 			SELECT * FROM email
 			WHERE email = :email AND code = :code

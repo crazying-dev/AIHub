@@ -3,6 +3,10 @@ import hashlib
 from database.conn import conn, text
 
 def GetID_UserEmail___UserPassword(UserEmail, UserPassword):
+	"""
+	通过Email和Password查找用户
+	return bool|userid
+	"""
 	UserPassword_hash = hashlib.sha256(UserPassword.encode("utf-8")).hexdigest()
 	sql = text("""
 	            SELECT * FROM users
@@ -19,6 +23,10 @@ def GetID_UserEmail___UserPassword(UserEmail, UserPassword):
 		return False
 
 def GetToken_UserEmail___UserPassword(UserEmail, UserPassword):
+	"""
+	通过Email和Password查找用户
+	return bool|usertoken
+	"""
 	UserPassword_hash = hashlib.sha256(UserPassword.encode("utf-8")).hexdigest()
 	sql = text("""
 	            SELECT * FROM users

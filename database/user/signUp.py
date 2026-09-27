@@ -3,6 +3,9 @@ from database.conn import conn, text
 import uuid
 
 def NewUser(UserName, UserEmail, UserPassword):
+	"""
+	新建用户
+	"""
 	sql = text("""
 	        INSERT INTO users (id, username, password, avatar, email, token)
 	        VALUES (:id, :username, :password, :avatar, :email, :token)

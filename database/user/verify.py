@@ -3,6 +3,10 @@ from database.conn import conn, text
 import hashlib
 
 def verifyUser_UserID___UserToken(UserID, UserToken) -> bool:
+	"""
+	通过userid和usertoken验证用户
+	return bool
+	"""
 	sql = text("""
 	            SELECT * FROM users
 	            WHERE token = :token_val AND id = :id_val
@@ -19,6 +23,10 @@ def verifyUser_UserID___UserToken(UserID, UserToken) -> bool:
 		return False
 
 def verifyUser_UserEmail___UserPassword(UserEmail, UserPassword):
+	"""
+	通过useremail和userpassword验证用户
+	return bool
+	"""
 	UserPassword_hash = hashlib.sha256(UserPassword.encode("utf-8")).hexdigest()
 	sql = text("""
 	            SELECT * FROM users

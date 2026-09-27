@@ -7,11 +7,18 @@ authors = [
     { name = "crazying-dev", email = "3890320020@qq.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "flask",
+    "openai",
+    "anthropic",
+    "google-genai",
+    "python-dotenv",
+    "psycopg2-binary",
+    "sqlalchemy",
+]
 
-[project.scripts]
-aihub = "aihub:main"
-
-[build-system]
-requires = ["uv_build>=0.12.5,<0.13.0"]
-build-backend = "uv_build"
+# 本仓库是一个「应用」而不是可安装的库：
+# 关掉 uv 的打包/构建环节，否则 uv_build 会去找 src/aihub/__init__.py，
+# 因缺少该模块而报 `Expected a Python module at: src/aihub/__init__.py`。
+[tool.uv]
+package = false

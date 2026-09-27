@@ -13,6 +13,7 @@
 | `database/community/` | 社区 key 池（`otherkey` 表）的增删查、候选调度与用量累计 |
 | `protocol/` | 多协议适配层：OpenAI / Anthropic / Gemini 的请求、响应与流式事件双向转换 |
 | `Relay.py` | 中继核心：按 `model` 选候选 key → 协议转换 → 调用上游 |
+| `Mail.py` | 注册验证码邮件发送（163 邮箱 SMTP，配置见 `.env.example`） |
 | `src/` | **前端**：Vue 3 + TypeScript + Vite + vue-router |
 | `public/` | 静态资源（favicon） |
 
@@ -40,14 +41,23 @@ SQLAlchemy 2.1 带来两个坑，仓库里已处理：
 
 ```bash
 DATABASE_URL=postgresql://<用户>:<密码>@<主机>:5432/aihub?sslmode=disable
+SMTP_USER=ourpet001@163.com
+SMTP_PASSWORD=<163 授权码>
 ```
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `DATABASE_URL` | 是 | PostgreSQL 连接串（不写驱动时按 psycopg2 处理）；缺失时启动会直接抛出明确错误 |
+| `SMTP_PASSWORD` | 是 | 163 邮箱**授权码**（在邮箱设置的 POP3/SMTP/IMAP 里开启服务时生成，不是网页登录密码）；不配置时注册接口返回 500「邮件服务未配置」 |
+| `SMTP_USER` | 否 | 发件邮箱，默认 `ourpet001@163.com`（发信地址要与它一致，否则会被 535 / 553 拒绝） |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_TLS` | 否 | 发信服务器，默认 `smtp.163.com` / `465` / `ssl`（可选 `starttls` 587、`none` 明文） |
+| `SMTP_TIMEOUT` | 否 | 发信超时秒数，默认 20 |
+| `SMTP_FROM_NAME` | 否 | 发件人显示名，默认 `AIHub` |
 
-> 注册验证码是随机 6 位，而注册邮件的发送逻辑还是占位（`route/api/sign.py` 里的
-> `# 此处写邮箱发送逻辑`）：现在收不到邮件，需要从数据库 `email` 表里取 `code` 完成注册。
+> 注册验证码是随机 6 位，由 `Mail.py` 经 163 SMTP 发送（主题「AIHub 注册验证码」），
+> **5 分钟内有效**：`database/persistent.py` 每秒清理 `email` 表里超过 300 秒的记录。
+> 同一邮箱 60 秒内只能发一次（重复请求返回 429）；发信是同步的（163 约 1~3 秒），
+> 失败时返回 502，具体原因（授权码错误 / 超时）只打在后端控制台，不暴露给前端。
 
 前端构建产物 `dist/` 已随仓库提交，部署机上不需要 Node / pnpm；若 `dist/` 缺失，`/` 会返回 503 并提示先构建。
 

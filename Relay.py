@@ -87,3 +87,28 @@ def Models(Caller=None):
 	else:
 		Names = database.community.Candidates.Models()
 	return ["auto"] + [Name for Name in Names if Name != "auto"]
+
+
+def Embed(Payload, Model, Caller=None):
+	"""embeddings：按 model 挑一条 openai 协议的上游 key 转发（其它协议不支持 embeddings）。"""
+	Pool = [Row for Row in Candidates(Model, Caller) if protocol.Normalize(Row["protocol"]) == "openai"]
+	if not Pool:
+		raise NoKeyError(f"{_Label(Caller)}里没有可用于模型 {Model} 的 embeddings key")
+	Private = _IsPrivate(Caller)
+	LastError = None
+	for Row in Pool:
+		Adapter = protocol.Get(Row["protocol"])
+		Handler = getattr(Adapter, "Embeddings", None)
+		if Handler is None:
+			LastError = ValueError(f"协议 {Row['protocol']} 不支持 embeddings")
+			continue
+		if Private:
+			database.private.Use.Use(Row["id"])
+		else:
+			database.community.Use.Use(Row["id"])
+		try:
+			return Handler(Row["url"], Row["key"], Row["model"], Payload), Row
+		except Exception as Error:
+			LastError = Error
+			continue
+	raise UpstreamError(str(LastError) if LastError else "上游调用失败")

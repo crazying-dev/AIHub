@@ -5,7 +5,7 @@
 - /assets/xxx.js   -> 带 hash 的构建产物（长期强缓存）
 - 其它未命中路径   -> 回退到 dist/index.html（前端是 history 模式路由，
                       刷新 /console、/docs 这类地址时不能 404）
-- /api/*、/v1/*    -> 属于后端接口，不做 SPA 回退，找不到就 404
+- /api/*、/v1/*、/v1beta/* -> 属于后端接口，不做 SPA 回退，找不到就 404
 
 可以用环境变量 AIHUB_DIST 指定其它产物目录。
 """
@@ -18,7 +18,7 @@ from werkzeug.exceptions import NotFound
 from route.app import app
 
 # 后端自身占用的路径前缀，这些路径永远不会回退到前端页面
-RESERVED_PREFIXES = {"api", "v1"}
+RESERVED_PREFIXES = {"api", "v1", "v1beta"}
 
 BUILD_HINT = """前端产物不存在：{dist}
 

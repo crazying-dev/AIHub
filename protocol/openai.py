@@ -204,3 +204,81 @@ def RenderStream(Chunks, Request):
 	for Data in Chunks:
 		yield common.SSELine(Data)
 	yield "data: [DONE]\n\n"
+
+
+def ParseCompletionRequest(Body) -> dict:
+	"""入站：OpenAI /v1/completions（legacy）请求体 -> canonical request。"""
+	Prompt = Body.get("prompt")
+	if isinstance(Prompt, list):
+		Text = "\n".join(str(Item) for Item in Prompt)
+	elif Prompt is None:
+		Text = ""
+	else:
+		Text = str(Prompt)
+	return {
+		"model": Body.get("model"),
+		"system": None,
+		"messages": [{"role": "user", "content": [{"type": "text", "text": Text}]}],
+		"temperature": Body.get("temperature"),
+		"top_p": Body.get("top_p"),
+		"max_tokens": Body.get("max_tokens"),
+		"stop": Body.get("stop"),
+		"stream": bool(Body.get("stream")),
+		"tools": None,
+		"tool_choice": None,
+		"raw": Body,
+	}
+
+
+def RenderCompletion(Response, Request) -> dict:
+	"""canonical response -> OpenAI 的 text_completion 结构（legacy /v1/completions）。"""
+	Choice = (Response.get("choices") or [{}])[0]
+	Message = Choice.get("message") or {}
+	Usage = Response.get("usage") or {}
+	return {
+		"id": Response.get("id") or common.NewID("cmpl"),
+		"object": "text_completion",
+		"created": Response.get("created") or common.Now(),
+		"model": Response.get("model") or Request.get("model"),
+		"choices": [{
+			"text": Message.get("content") or "",
+			"index": 0,
+			"logprobs": None,
+			"finish_reason": Choice.get("finish_reason") or "stop",
+		}],
+		"usage": Usage or common.MakeUsage(),
+	}
+
+
+def RenderCompletionStream(Chunks, Request):
+	"""canonical 分片 -> legacy /v1/completions 的 SSE 文本。"""
+	Model = Request.get("model")
+	for Data in Chunks:
+		Choice = (Data.get("choices") or [{}])[0]
+		Delta = Choice.get("delta") or {}
+		Frame = {
+			"id": Data.get("id") or common.NewID("cmpl"),
+			"object": "text_completion",
+			"created": Data.get("created") or common.Now(),
+			"model": Data.get("model") or Model,
+			"choices": [{
+				"text": Delta.get("content") or "",
+				"index": 0,
+				"logprobs": None,
+				"finish_reason": Choice.get("finish_reason"),
+			}],
+		}
+		if Data.get("usage"):
+			Frame["usage"] = Data["usage"]
+		yield common.SSELine(Frame)
+	yield "data: [DONE]\n\n"
+
+
+def Embeddings(BaseURL, ApiKey, Model, Payload) -> dict:
+	"""把 embeddings 请求打到 OpenAI 兼容上游（只有 openai 协议支持 embeddings）。"""
+	Client = openai.OpenAI(api_key=ApiKey or "not-needed", base_url=BaseURL or None)
+	Params = {"model": Model, "input": Payload.get("input")}
+	for Field in ("encoding_format", "dimensions", "user"):
+		if Payload.get(Field) is not None:
+			Params[Field] = Payload[Field]
+	return common.Dump(Client.embeddings.create(**Params))

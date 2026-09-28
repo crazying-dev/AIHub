@@ -127,3 +127,44 @@ def MergeSameRole(Messages) -> list:
 		else:
 			Merged.append(message)
 	return Merged
+
+
+def _TokenCount(Text) -> int:
+	"""粗估一段文本的 token 数：非 ASCII 字符按 1 个算，ASCII 每 4 个字符算 1 个。"""
+	if not Text:
+		return 0
+	Wide = 0
+	Narrow = 0
+	for Character in Text:
+		if ord(Character) > 0x7F:
+			Wide += 1
+		else:
+			Narrow += 1
+	return Wide + (Narrow + 3) // 4
+
+
+def EstimateTokens(Request) -> int:
+	"""估算 canonical request 的输入 token 数（count_tokens 用；图片按 85 个算）。
+
+说明：AIHub 是中继，上游协议各不相同，没法用统一的真实分词器，
+这里给的是保守估计——够客户端做上下文预算，不要当精确值用。
+"""
+	Total = 0
+	if Request.get("system"):
+		Total += _TokenCount(Request["system"])
+	for Message in Request.get("messages") or []:
+		Total += 4
+		for Part in Message.get("content") or []:
+			Type = Part.get("type")
+			if Type == "text":
+				Total += _TokenCount(Part.get("text"))
+			elif Type == "image":
+				Total += 85
+		for Call in Message.get("tool_calls") or []:
+			Total += _TokenCount(Call.get("name"))
+			Total += _TokenCount(Call.get("arguments"))
+	for Tool in Request.get("tools") or []:
+		Total += _TokenCount(Tool.get("name"))
+		Total += _TokenCount(Tool.get("description"))
+		Total += _TokenCount(Dumps(Tool.get("parameters") or {}))
+	return max(1, Total)

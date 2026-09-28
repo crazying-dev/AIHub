@@ -4,13 +4,16 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import CodeBlock from '../components/CodeBlock.vue'
 import { chatSnippets, curlQuickstart, CHAT_ENDPOINT, API_HOST } from '../data/snippets'
+import { protocols, relayEndpoints } from '../data/protocols'
 
 const activeSnippet = ref(0)
+const activeProtocol = ref(0)
 
 const toc = [
   { id: 'quickstart', label: '快速开始' },
   { id: 'auth', label: '鉴权方式' },
   { id: 'chat', label: '对话补全接口' },
+  { id: 'protocols', label: '多协议接入' },
   { id: 'routing', label: '公共库 / 私有库路由' },
   { id: 'management', label: '管理与社区接口' },
   { id: 'errors', label: '错误码' },
@@ -48,7 +51,7 @@ const routing = [
   },
   {
     title: '协议转换',
-    desc: '上游支持 openai / anthropic / gemini；入站支持 OpenAI 与 Anthropic，网关负责双向转换。',
+    desc: '上游支持 openai / anthropic / gemini；入站支持 OpenAI、Responses、Anthropic、Ollama、Gemini 原生，网关负责双向转换。',
   },
 ]
 
@@ -68,9 +71,6 @@ const endpoints = [
   { method: 'POST', path: '/api/community/upload', desc: '上传自己的上游 key 到公共库' },
   { method: 'POST', path: '/api/community/list', desc: '当前用户上传的公共库 key（上游密钥已打码）' },
   { method: 'POST', path: '/api/community/delete', desc: '删除自己上传的公共库 key' },
-  { method: 'POST', path: '/v1/chat/completions', desc: 'OpenAI 协议入站的对话补全接口' },
-  { method: 'POST', path: '/v1/messages', desc: 'Anthropic 协议入站的对话补全接口' },
-  { method: 'GET', path: '/v1/models', desc: '社区池当前可用的模型标识（含 auto）' },
 ]
 
 /** 响应示例：放在 script 里而不是模板属性里，避免多行字符串干扰模板解析 */
@@ -109,7 +109,7 @@ const errors = [
       <div class="docs__meta">
         <span class="badge"><AppIcon name="globe" :size="13" />{{ API_HOST }}</span>
         <span class="badge"><AppIcon name="code" :size="13" />OpenAI compatible</span>
-        <span class="badge badge--ok"><AppIcon name="check" :size="13" />OpenAI / Anthropic 双协议</span>
+        <span class="badge badge--ok"><AppIcon name="check" :size="13" />五种客户端协议</span>
       </div>
     </header>
 
@@ -179,6 +179,46 @@ const errors = [
           </div>
           <p>响应体与 OpenAI 保持一致：</p>
           <CodeBlock label="200 OK" :code="responseSample" />
+        </section>
+
+        <section id="protocols" class="doc-section">
+          <h2>多协议接入</h2>
+          <p>
+            同一个密钥可以对接多种客户端协议，网关会把它转换成所选上游 key 的协议；
+            公共库凭证 <code>ah-xxxx</code> 对下面所有入口都适用。
+          </p>
+          <ul class="endpoints">
+            <li v-for="item in protocols" :key="item.id">
+              <span class="badge badge--accent">{{ item.label }}</span>
+              <code class="mono">{{ item.path }}</code>
+              <span class="desc">{{ item.desc }}</span>
+              <span class="desc">鉴权：<code>{{ item.auth }}</code></span>
+            </li>
+          </ul>
+          <p>各协议入口的调用示例：</p>
+          <div class="tabs">
+            <button
+              v-for="(item, index) in protocols"
+              :key="item.id"
+              type="button"
+              class="tabs__tab"
+              :class="{ 'tabs__tab--active': index === activeProtocol }"
+              @click="activeProtocol = index"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+          <CodeBlock :code="protocols[activeProtocol].code" :label="protocols[activeProtocol].label" />
+          <p>完整端点清单：</p>
+          <ul class="endpoints">
+            <li v-for="item in relayEndpoints" :key="item.path">
+              <span class="badge" :class="item.method === 'GET' ? 'badge--ok' : 'badge--accent'">
+                {{ item.method }}
+              </span>
+              <code class="mono">{{ item.path }}</code>
+              <span class="desc">{{ item.desc }}</span>
+            </li>
+          </ul>
         </section>
 
         <section id="routing" class="doc-section">

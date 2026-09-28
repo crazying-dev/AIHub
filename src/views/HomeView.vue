@@ -13,8 +13,8 @@ const activeSnippet = ref(0)
 const features = [
   {
     icon: 'globe',
-    title: '统一 OpenAI 协议',
-    desc: '一套 /v1/chat/completions 接口打穿全部模型，已有 OpenAI SDK 只需改 base_url。',
+    title: '多协议统一接入',
+    desc: 'OpenAI、Responses、Anthropic、Ollama、Gemini 原生五种客户端协议都能直连，网关负责双向转换。',
   },
   {
     icon: 'layers',
@@ -42,7 +42,7 @@ const features = [
       <div class="hero__inner">
         <span class="badge badge--accent hero__badge">
           <AppIcon name="bolt" :size="13" />
-          OpenAI 兼容 · 一个密钥接入全部大模型
+          OpenAI 兼容 · 五种客户端协议 · 一个密钥接入全部大模型
         </span>
         <h1>
           写给开发者的<br />
@@ -96,6 +96,7 @@ const features = [
           网关按 <code>model</code> 名路由；填 <code>auto</code> 会自动选择优先级更高的可用 key。
         </p>
         <p>调用时只需修改请求体里的 <code>model</code> 字段，其余参数与 OpenAI 完全一致。</p>
+        <p>OpenAI、Responses、Anthropic、Ollama、Gemini 原生等客户端协议都能直连，不用为每种客户端单独适配。</p>
         <RouterLink class="link" to="/community">去公共库看看有哪些可用模型
           <AppIcon name="arrow-right" :size="14" />
         </RouterLink>

@@ -8,11 +8,11 @@
 | 路径 | 说明 |
 | --- | --- |
 | `main.py` | 后端入口：启动 Flask（127.0.0.1:2685）与后台常驻线程 |
-| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（个人密钥）、`/api/private/*`（私有库）、`/api/community/*`（公共库）、`/v1/*`（模型中继） |
+| `route/` | 后端路由：`/api/sign*`（注册登录）、`/api/key*`（个人密钥）、`/api/private/*`（私有库）、`/api/community/*`（公共库）；`route/proxy/` 是模型中继的入站协议路由 |
 | `database/` | PostgreSQL 数据层（SQLAlchemy），建表逻辑在 `InitDatabase.py` |
 | `database/community/` | 公共库（`otherkey` 表）的增删查、候选调度与用量累计 |
 | `database/private/` | 私有库（`privatekey` 表）的增删查、按授权范围过滤候选与用量累计 |
-| `protocol/` | 多协议适配层：OpenAI / Anthropic / Gemini 的请求、响应与流式事件双向转换 |
+| `protocol/` | 多协议适配层：入站 OpenAI / Responses / Ollama / Anthropic / Gemini，上游 OpenAI / Anthropic / Gemini，负责请求、响应与流式事件的双向转换 |
 | `Relay.py` | 中继核心：按 `model` 选候选 key → 协议转换 → 调用上游 |
 | `Mail.py` | 注册验证码邮件发送（163 邮箱 SMTP，配置见 `.env.example`） |
 | `src/` | **前端**：Vue 3 + TypeScript + Vite + vue-router |
@@ -64,15 +64,31 @@ SMTP_PASSWORD=<163 授权码>
 
 ## 后端接口
 
-### 模型中继（OpenAI / Anthropic 双协议入站）
+### 模型中继（五种客户端协议入站）
+
+所有入口共用同一套鉴权与路由规则（见下节），最终都按所选上游 key 的协议发起调用。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/v1/chat/completions` | OpenAI 兼容入站，字段与官方一致，支持 `stream` |
-| `POST` | `/v1/messages` | Anthropic Messages 入站，支持流式 SSE |
+| `POST` | `/v1/chat/completions` | OpenAI Chat Completions 入站，字段与官方一致，支持 `stream` |
+| `POST` | `/v1/completions` | OpenAI Completions（legacy）入站，返回 `text_completion` 结构 |
+| `POST` | `/v1/responses` | OpenAI Responses API 入站（`input` / `instructions` / 函数调用，带事件名的 SSE 流） |
+| `POST` | `/v1/embeddings` | OpenAI Embeddings 入站（只有 `openai` 协议的上游 key 支持） |
 | `GET` | `/v1/models` | 当前调用方（公共库 / 私有库）可用的模型标识（含 `auto`） |
+| `POST` | `/v1/messages` | Anthropic Messages 入站，支持流式 SSE |
+| `POST` | `/v1/messages/count_tokens` | Anthropic 令牌计数（本地估算） |
+| `POST` | `/api/chat` | Ollama 对话入站（NDJSON 流） |
+| `POST` | `/api/generate` | Ollama 补全入站（NDJSON 流） |
+| `GET` | `/api/tags` | Ollama 模型列表 |
+| `GET` | `/api/version`・`/api/ps` | Ollama 版本号 / 常驻模型（中继无常驻模型，返回空列表） |
+| `POST` | `/api/show` | Ollama 模型详情 |
+| `POST` | `/v1beta/models/{model}:generateContent` | Gemini 原生对话 |
+| `POST` | `/v1beta/models/{model}:streamGenerateContent` | Gemini 原生对话（SSE 流） |
+| `POST` | `/v1beta/models/{model}:countTokens` | Gemini 令牌计数（本地估算） |
+| `GET` | `/v1beta/models` | Gemini 模型列表 |
 
-鉴权用 `Authorization: Bearer <key>`；调用 Anthropic 入站时也接受 `x-api-key`。两种 key：
+
+鉴权（所有入站入口通用）：`Authorization: Bearer <key>`；Anthropic 入口也接受 `x-api-key`，Gemini 入口接受 `?key=`，Ollama 入口不带凭证时退回公共库 `ah-xxxx`。两种 key：
 
 - **`ah-xxxx`（固定字面量，就是四个 x，不可更换）**：公共库凭证，**任何人**带上它就能调用
   公共库（社区池）里的全部 key，不需要注册、也不需要新建密钥；
@@ -107,11 +123,14 @@ SMTP_PASSWORD=<163 授权码>
 
 ### 协议转换
 
-上游支持 `openai` / `anthropic` / `gemini` 三种协议（走各自官方 SDK），入站支持 OpenAI 与 Anthropic。
-`protocol/` 会把入站请求归一化为内部规范格式，再把上游响应 / 流式事件转换回调用方协议，
-因此用 OpenAI 客户端调用一把 Anthropic 上游 key 也是可行的。
+上游支持 `openai` / `anthropic` / `gemini` 三种协议（走各自官方 SDK）；入站支持 OpenAI Chat Completions、
+OpenAI Responses、OpenAI Completions(legacy)、OpenAI Embeddings、Anthropic Messages、Ollama、Gemini 原生。
+`protocol/` 把入站请求归一化为内部规范格式，再把上游响应 / 流式事件转换回调用方协议，
+因此用 OpenAI 客户端调一把 Anthropic 上游 key、或用 Ollama 客户端调 Gemini key 都是可行的。
 
-> 当前限制：Gemini 上游仅支持文本 / 图片，工具调用不做转换，且不能作为入站协议；
+> 当前限制：Gemini 上游仅支持文本 / 图片，工具调用不做转换；
+> `count_tokens` 是本地估算（上游协议各异，没有统一分词器），只适合做上下文预算；
+> `embeddings` 只支持 `openai` 协议的上游 key；
 > 流式调用只在「建立上游请求」阶段失败时才会切换下一个候选，流开始后的上游报错会原样透传给调用方。
 
 ### 管理接口（Cookie 鉴权）
@@ -146,7 +165,7 @@ SMTP_PASSWORD=<163 授权码>
 | `/console` | 控制台 | 密钥列表 / 新建密钥 / 设置授权范围 / 吊销密钥（需登录） |
 | `/community` | 社区 | 公共库：固定凭证 `ah-xxxx`、浏览、上传自己的上游 key、删除自己上传的条目 |
 | `/library` | 私有库 | 只给自己用的上游 key：上传 / 删除（需登录） |
-| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、公共库 / 私有库与模型路由、错误码、SDK 示例 |
+| `/docs` | 接入文档 | 快速开始、鉴权、接口字段、多协议接入、公共库 / 私有库与模型路由、错误码、SDK 示例 |
 | `*` | 404 | 兜底页面 |
 
 ### 本地开发
@@ -157,7 +176,7 @@ pnpm dev      # http://localhost:5173
 pnpm build    # vue-tsc 类型检查 + 生产构建到 dist/
 ```
 
-`vite.config.ts` 里已经把 `/api`、`/v1` 代理到 `http://127.0.0.1:2685`，
+`vite.config.ts` 里已经把 `/api`、`/v1`（前缀匹配，含 `/v1beta`）代理到 `http://127.0.0.1:2685`，
 所以本地只需另外启动后端（`uv run main.py`）即可联调，不存在跨域问题。
 
 > 提交约定：`dist/` 是入库的。改完 `src/` 后要执行 `pnpm build`，并把 `dist/` 一起提交，
@@ -181,7 +200,7 @@ uv run main.py      # http://127.0.0.1:2685 直接就是前端页面（dist/ 已
 | --- | --- |
 | `/`、`/console`、`/docs` … | 返回 `dist/index.html`（history 模式路由刷新不 404） |
 | `/assets/*` | 返回构建产物，`Cache-Control: public, max-age=31536000, immutable` |
-| `/api/*`、`/v1/*` | 只走后端接口，不会被前端吞掉（找不到就 404） |
+| `/api/*`、`/v1/*`、`/v1beta/*` | 只走后端接口，不会被前端吞掉（找不到就 404） |
 | `dist/` 不存在 | 返回 503 与“请先执行 pnpm build”的提示 |
 
 产物目录默认是 `<项目根>/dist`，可用环境变量 `AIHUB_DIST` 指向别处。

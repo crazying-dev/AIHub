@@ -109,7 +109,8 @@ SMTP_PASSWORD=<163 授权码>
   Flask 的 `strict_slashes` 返回 `405`（客户端 `base_url` 末尾带 `/` 时很常见）；
 - **错误 JSON 化**：中继面上出现 `404` / `405` 时，按对应协议返回 JSON 错误体
   （OpenAI / Anthropic / Gemini / Ollama 各自的形状）并带上 `Allow` 头，
-  不再回一坨客户端解析不了的 HTML。
+  不再回一坨客户端解析不了的 HTML。路径压根不存在给 `404`，路径存在但方法用错给
+  `405`（带 `Allow`），两者不会再被前端兜底路由搅在一起。
 
 ### 两套 key 库与 model 路由
 

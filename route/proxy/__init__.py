@@ -7,6 +7,7 @@
 - Responses.py  ：OpenAI Responses API
 - Ollama.py     ：Ollama（/api/chat、/api/generate、/api/tags ...）
 - Gemini.py     ：Gemini 原生 REST（/v1beta/models/...）
+- Compat.py     ：客户端兼容层（跨域预检、结尾斜杠容错、错误 JSON 化）
 """
 import route.proxy.Common
 import route.proxy.Chat
@@ -14,3 +15,4 @@ import route.proxy.Embeddings
 import route.proxy.Responses
 import route.proxy.Ollama
 import route.proxy.Gemini
+import route.proxy.Compat

@@ -7,7 +7,7 @@ import Relay
 from route.proxy.Common import Authenticate, Body, Failure, Guard, Headers, JSON, OpenAIError
 
 
-@app.route("/v1/embeddings", methods=["POST"])
+@app.route("/v1/embeddings", methods=["POST"], strict_slashes=False)
 @Guard(OpenAIError)
 def Embeddings():
 	"""OpenAI Embeddings 协议入站"""

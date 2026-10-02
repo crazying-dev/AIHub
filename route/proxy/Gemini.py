@@ -28,7 +28,7 @@ def _Split(Rest):
 	return Model, Action or "generateContent"
 
 
-@app.route("/v1beta/models", methods=["GET"])
+@app.route("/v1beta/models", methods=["GET"], strict_slashes=False)
 @Guard(GeminiError)
 def GeminiModels():
 	"""可用模型列表"""
@@ -36,7 +36,7 @@ def GeminiModels():
 	return flask.jsonify(Adapter.RenderModels(Relay.Models(Authenticate())))
 
 
-@app.route("/v1beta/models/<path:Rest>", methods=["POST"])
+@app.route("/v1beta/models/<path:Rest>", methods=["POST"], strict_slashes=False)
 @Guard(GeminiError)
 def GeminiModelAction(Rest):
 	"""generateContent / streamGenerateContent / countTokens"""

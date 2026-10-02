@@ -18,7 +18,7 @@ from route.proxy.Common import Authenticate, Body, Guard, NeedMessages, OllamaEr
 NDJSON = "application/x-ndjson"
 
 
-@app.route("/api/chat", methods=["POST"])
+@app.route("/api/chat", methods=["POST"], strict_slashes=False)
 @Guard(OllamaError)
 def Chat():
 	"""Ollama 对话协议入站"""
@@ -28,7 +28,7 @@ def Chat():
 	return Respond(Caller, Adapter, Request, StreamMimetype=NDJSON)
 
 
-@app.route("/api/generate", methods=["POST"])
+@app.route("/api/generate", methods=["POST"], strict_slashes=False)
 @Guard(OllamaError)
 def Generate():
 	"""Ollama 补全协议入站"""
@@ -45,7 +45,7 @@ def Generate():
 	)
 
 
-@app.route("/api/tags", methods=["GET"])
+@app.route("/api/tags", methods=["GET"], strict_slashes=False)
 @Guard(OllamaError)
 def Tags():
 	"""可用模型列表"""
@@ -53,21 +53,21 @@ def Tags():
 	return flask.jsonify(Adapter.RenderTags(Relay.Models(Authenticate(AllowAnonymous=True))))
 
 
-@app.route("/api/ps", methods=["GET"])
+@app.route("/api/ps", methods=["GET"], strict_slashes=False)
 @Guard(OllamaError)
 def Ps():
 	"""中继没有常驻模型，返回空列表即可（部分客户端会轮询它）。"""
 	return flask.jsonify({"models": []})
 
 
-@app.route("/api/version", methods=["GET"])
+@app.route("/api/version", methods=["GET"], strict_slashes=False)
 def Version():
 	"""版本号"""
 	Adapter = protocol.Inbound("ollama")
 	return flask.jsonify(Adapter.RenderVersion())
 
 
-@app.route("/api/show", methods=["POST"])
+@app.route("/api/show", methods=["POST"], strict_slashes=False)
 @Guard(OllamaError)
 def Show():
 	"""模型详情"""

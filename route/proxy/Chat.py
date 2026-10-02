@@ -29,7 +29,7 @@ from route.proxy.Common import (
 )
 
 
-@app.route("/v1/chat/completions", methods=["POST"])
+@app.route("/v1/chat/completions", methods=["POST"], strict_slashes=False)
 @Guard(OpenAIError)
 def ChatCompletions():
 	"""OpenAI Chat Completions 协议入站"""
@@ -39,7 +39,7 @@ def ChatCompletions():
 	return Respond(Caller, Adapter, Request)
 
 
-@app.route("/v1/completions", methods=["POST"])
+@app.route("/v1/completions", methods=["POST"], strict_slashes=False)
 @Guard(OpenAIError)
 def Completions():
 	"""OpenAI Completions（legacy）协议入站"""
@@ -55,7 +55,7 @@ def Completions():
 	)
 
 
-@app.route("/v1/messages", methods=["POST"])
+@app.route("/v1/messages", methods=["POST"], strict_slashes=False)
 @Guard(AnthropicError)
 def Messages():
 	"""Anthropic Messages 协议入站"""
@@ -65,7 +65,7 @@ def Messages():
 	return Respond(Caller, Adapter, Request)
 
 
-@app.route("/v1/messages/count_tokens", methods=["POST"])
+@app.route("/v1/messages/count_tokens", methods=["POST"], strict_slashes=False)
 @Guard(AnthropicError)
 def CountTokens():
 	"""
@@ -80,7 +80,7 @@ def CountTokens():
 	return flask.jsonify({"input_tokens": common.EstimateTokens(Request)})
 
 
-@app.route("/v1/models", methods=["GET"])
+@app.route("/v1/models", methods=["GET"], strict_slashes=False)
 @Guard(OpenAIError)
 def Models():
 	"""当前调用方（公共库 / 私有库）可用的模型标识（含 auto）"""

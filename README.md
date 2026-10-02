@@ -97,6 +97,20 @@ SMTP_PASSWORD=<163 授权码>
 
 网关会把本次命中的 key 与模型回传到响应头 `X-AIHub-Key` / `X-AIHub-Model`，便于排查路由结果。
 
+### 客户端兼容层
+
+中继面（`/v1/*`、`/v1beta/*`、Ollama 的 `/api/<动作>`）统一做了一组容错，实现见 `route/proxy/Compat.py`：
+
+- **跨域（CORS）**：浏览器里的 Web 客户端可以直接直连。`OPTIONS` 预检返回 `Access-Control-Allow-Origin: *`
+  （鉴权走请求头、不用 Cookie，所以不带凭据），允许的请求头按预检里的声明回显，并用
+  `Access-Control-Expose-Headers` 把 `X-AIHub-Key` / `X-AIHub-Model` 暴露给页面。
+  管理面 `/api/*`（sign / key / community / private，走 Cookie 鉴权）**不参与跨域**；
+- **结尾斜杠容错**：`POST /v1/chat/completions/` 这类多一个斜杠的地址照常处理，不再因为
+  Flask 的 `strict_slashes` 返回 `405`（客户端 `base_url` 末尾带 `/` 时很常见）；
+- **错误 JSON 化**：中继面上出现 `404` / `405` 时，按对应协议返回 JSON 错误体
+  （OpenAI / Anthropic / Gemini / Ollama 各自的形状）并带上 `Allow` 头，
+  不再回一坨客户端解析不了的 HTML。
+
 ### 两套 key 库与 model 路由
 
 上游厂商的 key（OpenAI / Anthropic / Gemini）分两处存放（实现见 `Relay.py`）：

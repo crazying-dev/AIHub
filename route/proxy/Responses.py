@@ -4,7 +4,7 @@ import protocol
 from route.proxy.Common import Authenticate, Body, Guard, NeedMessages, OpenAIError, Parse, Respond
 
 
-@app.route("/v1/responses", methods=["POST"])
+@app.route("/v1/responses", methods=["POST"], strict_slashes=False)
 @Guard(OpenAIError)
 def Responses():
 	"""OpenAI Responses API 协议入站"""
